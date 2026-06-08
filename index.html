@@ -1,1 +1,214 @@
-__HTML_PLACEHOLDER__
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ED Route Optimizer</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2128;
+    --border: #30363d;
+    --accent: #f0a000;
+    --accent2: #58a6ff;
+    --text: #c9d1d9;
+    --text-muted: #8b949e;
+    --start: #3fb950;
+    --end: #f85149;
+    --chain: #a371f7;
+    --danger: #f85149;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  header h1 { font-size: 15px; font-weight: 600; color: var(--accent); letter-spacing: 1px; }
+  header span { color: var(--text-muted); font-size: 11px; }
+  .main { display: flex; flex: 1; overflow: hidden; }
+  .left { width: 300px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .panel-section { border-bottom: 1px solid var(--border); padding: 10px 12px; }
+  .panel-section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px; }
+  .row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+  .row label { color: var(--text-muted); width: 38px; flex-shrink: 0; font-size: 11px; }
+  select, input[type=text] { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 12px; flex: 1; }
+  select:focus, input[type=text]:focus { outline: none; border-color: var(--accent2); }
+  .btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+  .btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .btn-primary { background: var(--accent); color: #000; font-weight: 700; border-color: var(--accent); }
+  .btn-primary:hover { background: #ffc107; border-color: #ffc107; color: #000; }
+  .btn-danger { border-color: var(--danger); color: var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: #fff; }
+  .btn-sm { padding: 3px 7px; font-size: 11px; }
+  textarea { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 8px; border-radius: 4px; font-size: 11px; width: 100%; resize: vertical; font-family: monospace; }
+  textarea:focus { outline: none; border-color: var(--accent2); }
+  .systems-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .sys-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px; margin-bottom: 4px; cursor: grab; display: flex; align-items: center; gap: 6px; font-size: 12px; user-select: none; }
+  .sys-item:active { cursor: grabbing; }
+  .sys-item .drag-hint { color: var(--text-muted); font-size: 10px; }
+  .sys-item .sys-name { flex: 1; }
+  .sys-item.is-start { border-left: 3px solid var(--start); }
+  .sys-item.is-end { border-left: 3px solid var(--end); }
+  .sys-item.dragging { opacity: 0.4; }
+  .sys-item .badge { font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
+  .badge-start { background: var(--start); color: #000; }
+  .badge-end { background: var(--end); color: #fff; }
+  .chains-panel { flex: 0 0 220px; overflow-y: auto; padding: 8px; }
+  .chain-block { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
+  .chain-header { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: rgba(163,113,247,0.1); border-bottom: 1px solid var(--border); }
+  .chain-header span { flex: 1; font-size: 11px; color: var(--chain); font-weight: 600; }
+  .chain-drop-zone { min-height: 32px; padding: 4px; display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-start; }
+  .chain-drop-zone.drag-over { background: rgba(88,166,255,0.08); border-radius: 4px; }
+  .chain-item { background: var(--bg); border: 1px solid var(--chain); color: var(--chain); border-radius: 3px; padding: 2px 6px; font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: grab; user-select: none; }
+  .chain-item:active { cursor: grabbing; }
+  .chain-item .remove-item { cursor: pointer; color: var(--text-muted); font-size: 10px; line-height: 1; }
+  .chain-item .remove-item:hover { color: var(--danger); }
+  .chain-empty { color: var(--text-muted); font-size: 11px; padding: 4px; font-style: italic; }
+  .add-chain-btn { width: 100%; background: none; border: 1px dashed var(--border); color: var(--text-muted); padding: 6px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .add-chain-btn:hover { border-color: var(--chain); color: var(--chain); }
+  .center { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #canvas { flex: 1; display: block; cursor: grab; background: #080c10; }
+  #canvas:active { cursor: grabbing; }
+  .bottom { height: 180px; flex-shrink: 0; background: var(--surface); border-top: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .bottom-header { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .bottom-header h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); flex: 1; }
+  .route-list { flex: 1; overflow-y: auto; padding: 6px 12px; display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-start; align-content: flex-start; }
+  .route-step { display: flex; align-items: center; gap: 4px; }
+  .route-node { background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 3px 8px; font-size: 11px; white-space: nowrap; }
+  .route-node.start-node { border-color: var(--start); color: var(--start); }
+  .route-node.end-node { border-color: var(--end); color: var(--end); }
+  .route-arrow { color: var(--text-muted); font-size: 10px; }
+  .route-dist { color: var(--text-muted); font-size: 10px; }
+  #status { padding: 4px 12px; font-size: 11px; color: var(--text-muted); flex-shrink: 0; min-height: 22px; }
+  .status-ok { color: var(--start); }
+  .status-err { color: var(--danger); }
+  .status-info { color: var(--accent2); }
+  .right { width: 220px; flex-shrink: 0; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .right h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); padding: 10px 12px 6px; border-bottom: 1px solid var(--border); }
+  .legend { padding: 8px 12px; font-size: 11px; line-height: 1.8; }
+  .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .stats-box { padding: 8px 12px; border-top: 1px solid var(--border); font-size: 12px; line-height: 2; }
+  .stats-box .stat-label { color: var(--text-muted); font-size: 11px; }
+  .stats-box .stat-val { float: right; color: var(--accent); font-weight: 600; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⬡ 3D ROUTE OPTIMIZER</h1>
+  <span>TSP with chain ordering constraints · 3D visualization</span>
+  <div style="flex:1"></div>
+  <button class="btn btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+  <button class="btn btn-sm" onclick="clearAll()">✕ Clear All</button>
+</header>
+<div class="main">
+  <div class="left">
+    <div class="panel-section">
+      <h2>Route Endpoints</h2>
+      <div class="row"><label>Start</label><select id="startSel" onchange="saveState()"><option value="">— none —</option></select></div>
+      <div class="row"><label>End</label><select id="endSel" onchange="saveState()"><option value="">— none —</option></select></div>
+    </div>
+    <div class="panel-section">
+      <h2>Add System Manually</h2>
+      <div class="row"><input type="text" id="manualName" placeholder="Name" style="flex:2"></div>
+      <div class="row">
+        <input type="text" id="manualX" placeholder="X" style="flex:1">
+        <input type="text" id="manualY" placeholder="Y" style="flex:1">
+        <input type="text" id="manualZ" placeholder="Z" style="flex:1">
+        <button class="btn btn-sm" onclick="addManual()">Add</button>
+      </div>
+    </div>
+    <div class="panel-section">
+      <h2>Import CSV (Name,X,Y,Z)</h2>
+      <textarea id="csvInput" rows="4" placeholder="Paste CSV here&#10;Name,X,Y,Z&#10;Sol,0,0,0"></textarea>
+      <div class="row" style="margin-top:6px">
+        <button class="btn" style="flex:1" onclick="importCSV()">Import</button>
+        <label class="btn" style="flex:1;text-align:center;cursor:pointer">Load File <input type="file" accept=".csv" onchange="loadFile(event)" style="display:none"></label>
+      </div>
+    </div>
+    <div class="panel-section" style="flex-shrink:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="margin:0">Systems (drag to chains)</h2>
+        <span id="sys-count" style="color:var(--text-muted);font-size:11px">0</span>
+      </div>
+    </div>
+    <div class="systems-list" id="sysList"></div>
+    <div style="padding:8px 12px;border-top:1px solid var(--border);flex-shrink:0">
+      <button class="btn btn-primary" style="width:100%;padding:8px" onclick="calculateRoute()">▶ CALCULATE ROUTE</button>
+    </div>
+  </div>
+  <div class="center">
+    <canvas id="canvas"></canvas>
+    <div class="bottom">
+      <div class="bottom-header">
+        <h2>Route</h2>
+        <span id="route-summary" style="font-size:11px;color:var(--text-muted)"></span>
+      </div>
+      <div class="route-list" id="routeList"></div>
+      <div id="status"></div>
+    </div>
+  </div>
+  <div class="right">
+    <h2>Chains</h2>
+    <div class="chains-panel" id="chainsPanel"></div>
+    <div style="padding:6px 8px;border-top:1px solid var(--border)">
+      <button class="add-chain-btn" onclick="addChain()">+ New Chain</button>
+    </div>
+    <h2 style="margin-top:auto">Legend</h2>
+    <div class="legend">
+      <div><span class="legend-dot" style="background:#3fb950"></span>Start</div>
+      <div><span class="legend-dot" style="background:#f85149"></span>End</div>
+      <div><span class="legend-dot" style="background:#58a6ff"></span>Route</div>
+      <div><span class="legend-dot" style="background:#8b949e"></span>Not used</div>
+    </div>
+    <div class="stats-box" id="statsBox"></div>
+  </div>
+</div>
+<script>
+let systems=[],chains=[],route=[],chainIdSeq=0;
+function saveState(){const st={systems,chains,start:document.getElementById('startSel').value,end:document.getElementById('endSel').value};localStorage.setItem('route_opt_state',JSON.stringify(st));}
+function loadState(){try{const raw=localStorage.getItem('route_opt_state');if(!raw)return;const st=JSON.parse(raw);systems=st.systems||[];chains=st.chains||[];chainIdSeq=chains.reduce((m,c)=>Math.max(m,c.id||0),0)+1;renderSystems();renderChains();updateSelects(st.start,st.end);}catch(e){}}
+function addManual(){const name=document.getElementById('manualName').value.trim();const x=parseFloat(document.getElementById('manualX').value)||0;const y=parseFloat(document.getElementById('manualY').value)||0;const z=parseFloat(document.getElementById('manualZ').value)||0;if(!name){setStatus('Enter a name.','err');return;}if(systems.find(s=>s.name.toLowerCase()===name.toLowerCase())){setStatus(`"${name}" already exists.`,'err');return;}systems.push({name,x,y,z});['manualName','manualX','manualY','manualZ'].forEach(id=>document.getElementById(id).value='');renderSystems();updateSelects();saveState();setStatus(`Added "${name}".`,'ok');}
+function importCSV(){const text=document.getElementById('csvInput').value.trim();if(!text){setStatus('Paste CSV first.','err');return;}parseCSVText(text);}
+function loadFile(evt){const file=evt.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{parseCSVText(e.target.result);evt.target.value='';};reader.readAsText(file);}
+function parseCSVText(text){const lines=text.trim().split(/\r?\n/);let added=0,skipped=0;let start=0;const firstCols=lines[0].split(',');if(isNaN(parseFloat(firstCols[1]))||firstCols[0].toLowerCase().includes('name')||firstCols[0].toLowerCase().includes('system'))start=1;for(let i=start;i<lines.length;i++){const parts=lines[i].split(',').map(s=>s.trim().replace(/^"|"$/g,''));if(!parts[0])continue;const name=parts[0];const x=parseFloat(parts[1])||0;const y=parseFloat(parts[2])||0;const z=parseFloat(parts[3])||0;if(systems.find(s=>s.name.toLowerCase()===name.toLowerCase())){skipped++;continue;}systems.push({name,x,y,z});added++;}renderSystems();updateSelects();saveState();setStatus(`Imported ${added} systems${skipped?`, skipped ${skipped} duplicates`:''}.`,'ok');document.getElementById('csvInput').value='';}
+function removeSystem(name){systems=systems.filter(s=>s.name!==name);chains.forEach(c=>{c.items=c.items.filter(i=>i!==name);});route=[];renderSystems();renderChains();updateSelects();drawCanvas();saveState();}
+function renderSystems(){const list=document.getElementById('sysList');const startVal=document.getElementById('startSel')?.value||'';const endVal=document.getElementById('endSel')?.value||'';list.innerHTML='';document.getElementById('sys-count').textContent=systems.length;systems.forEach(sys=>{const div=document.createElement('div');div.className='sys-item'+(sys.name===startVal?' is-start':sys.name===endVal?' is-end':'');div.draggable=true;div.dataset.name=sys.name;div.innerHTML=`<span class="drag-hint">⠿</span><span class="sys-name">${sys.name}</span>${sys.name===startVal?'<span class="badge badge-start">S</span>':''}${sys.name===endVal?'<span class="badge badge-end">E</span>':''}<button class="btn btn-sm btn-danger" onclick="removeSystem('${sys.name.replace(/'/g,"\\'")}')">✕</button>`;div.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',sys.name);e.dataTransfer.effectAllowed='copy';div.classList.add('dragging');});div.addEventListener('dragend',()=>div.classList.remove('dragging'));list.appendChild(div);});}
+function updateSelects(startVal,endVal){const ss=document.getElementById('startSel');const se=document.getElementById('endSel');const sv=startVal!==undefined?startVal:ss.value;const ev=endVal!==undefined?endVal:se.value;const opts='<option value="">— none —</option>'+systems.map(s=>`<option value="${s.name}">${s.name}</option>`).join('');ss.innerHTML=opts;se.innerHTML=opts;if(systems.find(s=>s.name===sv))ss.value=sv;if(systems.find(s=>s.name===ev))se.value=ev;renderSystems();}
+function addChain(){chains.push({id:chainIdSeq++,items:[]});renderChains();saveState();}
+function removeChain(id){chains=chains.filter(c=>c.id!==id);renderChains();saveState();}
+function removeChainItem(chainId,idx){const c=chains.find(c=>c.id===chainId);if(c){c.items.splice(idx,1);renderChains();saveState();}}
+function renderChains(){const panel=document.getElementById('chainsPanel');panel.innerHTML='';if(chains.length===0){panel.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:6px;font-style:italic">No chains yet.<br>Click "+ New Chain" below.</div>';return;}chains.forEach((chain,ci)=>{const block=document.createElement('div');block.className='chain-block';const header=document.createElement('div');header.className='chain-header';header.innerHTML=`<span>Chain ${ci+1}</span><button class="btn btn-sm btn-danger" onclick="removeChain(${chain.id})">✕</button>`;const zone=document.createElement('div');zone.className='chain-drop-zone';zone.dataset.chainId=chain.id;if(chain.items.length===0){zone.innerHTML='<span class="chain-empty">Drop systems here</span>';}else{chain.items.forEach((name,idx)=>{if(idx>0){const arr=document.createElement('span');arr.textContent='→';arr.style.cssText='color:var(--text-muted);font-size:10px;align-self:center';zone.appendChild(arr);}const item=document.createElement('div');item.className='chain-item';item.draggable=true;item.dataset.chainId=chain.id;item.dataset.idx=idx;item.innerHTML=`${name}<span class="remove-item" onclick="removeChainItem(${chain.id},${idx})">✕</span>`;item.addEventListener('dragstart',e=>{e.dataTransfer.setData('chain-move',JSON.stringify({chainId:chain.id,idx}));e.dataTransfer.effectAllowed='move';});zone.appendChild(item);});}zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over');});zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-over');const chainId=parseInt(zone.dataset.chainId);const c=chains.find(c=>c.id===chainId);if(!c)return;const moveData=e.dataTransfer.getData('chain-move');if(moveData){const{chainId:srcId,idx:srcIdx}=JSON.parse(moveData);const src=chains.find(c=>c.id===srcId);if(!src)return;const name=src.items[srcIdx];src.items.splice(srcIdx,1);c.items.push(name);renderChains();saveState();return;}const name=e.dataTransfer.getData('text/plain');if(!name||!systems.find(s=>s.name===name))return;c.items.push(name);renderChains();saveState();});block.appendChild(header);block.appendChild(zone);panel.appendChild(block);});}
+function dist(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2);}
+function routeDist(names){let d=0;for(let i=0;i<names.length-1;i++){const a=systems.find(s=>s.name===names[i]);const b=systems.find(s=>s.name===names[i+1]);if(a&&b)d+=dist(a,b);}return d;}
+function isValidRoute(route,cc){for(const chain of cc){if(chain.items.length===0)continue;let p=0;for(const name of route){if(name===chain.items[p]){p++;if(p===chain.items.length)break;}}if(p<chain.items.length)return false;}return true;}
+function initProgress(cc){return cc.map(()=>0);}
+function canVisit(name,progress,cc){for(let ci=0;ci<cc.length;ci++){const chain=cc[ci];const p=progress[ci];for(let j=0;j<chain.items.length;j++){if(chain.items[j]===name&&j>p)return false;}}return true;}
+function advanceProgress(name,progress,cc){const np=[...progress];for(let ci=0;ci<cc.length;ci++){const chain=cc[ci];if(np[ci]<chain.items.length&&chain.items[np[ci]]===name)np[ci]++;}return np;}
+function buildGreedyRoute(startName,endName,available,cc){let route=[startName];let progress=advanceProgress(startName,initProgress(cc),cc);let remaining=[...available];while(remaining.length>0){const current=systems.find(s=>s.name===route[route.length-1]);let bestName=null,bestDist=Infinity;for(const name of remaining){if(!canVisit(name,progress,cc))continue;const s=systems.find(s=>s.name===name);const d=dist(current,s);if(d<bestDist){bestDist=d;bestName=name;}}if(!bestName)return null;route.push(bestName);progress=advanceProgress(bestName,progress,cc);remaining=remaining.filter(n=>n!==bestName);}if(endName&&endName!==startName)route.push(endName);else if(endName===startName)route.push(endName);return route;}
+function twoOpt(route,cc,startName,endName){const fixedStart=!!startName;const fixedEnd=!!endName;let improved=true;let best=[...route];let bestD=routeDist(best);while(improved){improved=false;for(let i=fixedStart?1:0;i<best.length-2;i++){for(let j=i+1;j<best.length-(fixedEnd?1:0);j++){const newRoute=[...best.slice(0,i),...best.slice(i,j+1).reverse(),...best.slice(j+1)];if(!isValidRoute(newRoute,cc))continue;const newD=routeDist(newRoute);if(newD<bestD-0.001){best=newRoute;bestD=newD;improved=true;}}}}return best;}
+function perturbRoute(route,startName,endName){const fixStart=!!startName;const fixEnd=!!(endName&&endName!==startName);const inner=route.slice(fixStart?1:0,route.length-(fixEnd?1:0));if(inner.length<2)return route;const i=Math.floor(Math.random()*inner.length);const j=Math.floor(Math.random()*inner.length);[inner[i],inner[j]]=[inner[j],inner[i]];return[...(fixStart?[startName]:[]),...inner,...(fixEnd?[endName]:[])];}  
+function calculateRoute(){const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value;const cc=chains.filter(c=>c.items.length>0);if(systems.length<2){setStatus('Need at least 2 systems.','err');return;}if(!startName){setStatus('Select a start system.','err');return;}setStatus('Calculating…','info');setTimeout(()=>{try{const allNames=systems.map(s=>s.name);let available=allNames.filter(n=>n!==startName&&n!==endName);if(endName===startName)available=allNames.filter(n=>n!==startName);let best=buildGreedyRoute(startName,endName||startName,available,cc);if(!best){setStatus('Cannot build route: constraint chains may be unsatisfiable.','err');return;}let bestD=routeDist(best);best=twoOpt(best,cc,startName,endName||startName);bestD=routeDist(best);const ITERS=Math.min(80,10*systems.length);for(let iter=0;iter<ITERS;iter++){let candidate=perturbRoute(best,startName,endName||startName);if(!isValidRoute(candidate,cc))continue;candidate=twoOpt(candidate,cc,startName,endName||startName);const cd=routeDist(candidate);if(cd<bestD-0.001){best=candidate;bestD=cd;}}route=best;renderRoute();drawCanvas();saveState();setStatus(`Route found: ${route.length} systems, ${bestD.toFixed(1)} units total.`,'ok');}catch(e){setStatus('Error: '+e.message,'err');}},30);}
+function renderRoute(){const list=document.getElementById('routeList');const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value||startName;list.innerHTML='';let totalDist=0;route.forEach((name,i)=>{if(i>0){const a=systems.find(s=>s.name===route[i-1]);const b=systems.find(s=>s.name===name);const d=(a&&b)?dist(a,b):0;totalDist+=d;const arrow=document.createElement('div');arrow.className='route-step';arrow.innerHTML=`<span class="route-arrow">→</span><span class="route-dist">${d.toFixed(1)}</span>`;list.appendChild(arrow);}const node=document.createElement('div');node.className='route-step';const isStart=name===startName&&i===0;const isEnd=name===endName&&i===route.length-1;node.innerHTML=`<span class="route-node ${isStart?'start-node':''} ${isEnd?'end-node':''}}">${i+1}. ${name}</span>`;list.appendChild(node);});document.getElementById('route-summary').textContent=route.length>0?`${route.length} systems · ${totalDist.toFixed(1)} units`:'';const statsBox=document.getElementById('statsBox');statsBox.innerHTML=route.length>0?`<div><span class="stat-label">Systems</span><span class="stat-val">${route.length}</span></div><div><span class="stat-label">Total dist.</span><span class="stat-val">${totalDist.toFixed(1)}</span></div><div><span class="stat-label">Jumps</span><span class="stat-val">${route.length-1}</span></div>`:'';}  
+let camRot={x:0.4,y:0.3},camZoom=1,isDragging=false,lastMouse={x:0,y:0},normalizedSystems=[];
+const canvas=document.getElementById('canvas');const ctx=canvas.getContext('2d');
+function normalize(){if(systems.length===0){normalizedSystems=[];return;}const xs=systems.map(s=>s.x),ys=systems.map(s=>s.y),zs=systems.map(s=>s.z);const minX=Math.min(...xs),maxX=Math.max(...xs);const minY=Math.min(...ys),maxY=Math.max(...ys);const minZ=Math.min(...zs),maxZ=Math.max(...zs);const range=Math.max(maxX-minX,maxY-minY,maxZ-minZ,1);normalizedSystems=systems.map(s=>({name:s.name,nx:(s.x-(minX+maxX)/2)/range,ny:(s.y-(minY+maxY)/2)/range,nz:(s.z-(minZ+maxZ)/2)/range}));}
+function project(nx,ny,nz){const cosY=Math.cos(camRot.y),sinY=Math.sin(camRot.y);const rx=nx*cosY-nz*sinY;const rz=nx*sinY+nz*cosY;const cosX=Math.cos(camRot.x),sinX=Math.sin(camRot.x);const ry2=ny*cosX-rz*sinX;const scale=camZoom*Math.min(canvas.width,canvas.height)*0.38;return{sx:canvas.width/2+rx*scale,sy:canvas.height/2-ry2*scale,depth:rz*cosX+ny*sinX};}
+function drawCanvas(){normalize();canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;ctx.clearRect(0,0,canvas.width,canvas.height);if(systems.length===0){ctx.fillStyle='#30363d';ctx.font='14px Segoe UI';ctx.textAlign='center';ctx.fillText('Import or add systems to begin',canvas.width/2,canvas.height/2);return;}const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value||startName;ctx.strokeStyle='rgba(48,54,61,0.4)';ctx.lineWidth=0.5;for(let v=-0.5;v<=0.5;v+=0.25){const p1=project(v,-0.5,0),p2=project(v,0.5,0);const p3=project(-0.5,v,0),p4=project(0.5,v,0);ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();ctx.beginPath();ctx.moveTo(p3.sx,p3.sy);ctx.lineTo(p4.sx,p4.sy);ctx.stroke();}if(route.length>1){for(let i=0;i<route.length-1;i++){const a=normalizedSystems.find(s=>s.name===route[i]);const b=normalizedSystems.find(s=>s.name===route[i+1]);if(!a||!b)continue;const pa=project(a.nx,a.ny,a.nz);const pb=project(b.nx,b.ny,b.nz);ctx.strokeStyle='rgba(88,166,255,0.6)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(pa.sx,pa.sy);ctx.lineTo(pb.sx,pb.sy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(88,166,255,0.7)';ctx.font='9px Segoe UI';ctx.textAlign='center';ctx.fillText(i+1,(pa.sx+pb.sx)/2,(pa.sy+pb.sy)/2-3);}}const projected=normalizedSystems.map(s=>{const p=project(s.nx,s.ny,s.nz);return{...s,...p};}).sort((a,b)=>a.depth-b.depth);projected.forEach(s=>{const inRoute=route.includes(s.name);const isStart=s.name===startName;const isEnd=s.name===endName&&endName;const color=isStart?'#3fb950':isEnd?'#f85149':inRoute?'#58a6ff':'#444c56';const r=isStart||isEnd?6:inRoute?5:3.5;ctx.beginPath();ctx.arc(s.sx,s.sy,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();if(inRoute||isStart||isEnd){ctx.strokeStyle=color;ctx.lineWidth=1;ctx.globalAlpha=0.3;ctx.beginPath();ctx.arc(s.sx,s.sy,r+3,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;}ctx.fillStyle=inRoute?'#c9d1d9':'#8b949e';ctx.font=(isStart||isEnd)?'bold 11px Segoe UI':'10px Segoe UI';ctx.textAlign='left';ctx.fillText(s.name,s.sx+r+3,s.sy+4);});}
+canvas.addEventListener('mousedown',e=>{isDragging=true;lastMouse={x:e.clientX,y:e.clientY};});
+canvas.addEventListener('mousemove',e=>{if(!isDragging)return;camRot.y+=(e.clientX-lastMouse.x)*0.006;camRot.x+=(e.clientY-lastMouse.y)*0.006;lastMouse={x:e.clientX,y:e.clientY};drawCanvas();});
+canvas.addEventListener('mouseup',()=>isDragging=false);
+canvas.addEventListener('mouseleave',()=>isDragging=false);
+canvas.addEventListener('wheel',e=>{e.preventDefault();camZoom*=e.deltaY<0?1.1:0.9;camZoom=Math.max(0.2,Math.min(8,camZoom));drawCanvas();},{passive:false});
+let lastTouch=null;
+canvas.addEventListener('touchstart',e=>{lastTouch=e.touches[0];});
+canvas.addEventListener('touchmove',e=>{e.preventDefault();if(!lastTouch)return;const t=e.touches[0];camRot.y+=(t.clientX-lastTouch.clientX)*0.006;camRot.x+=(t.clientY-lastTouch.clientY)*0.006;lastTouch=t;drawCanvas();},{passive:false});
+window.addEventListener('resize',drawCanvas);
+function exportCSV(){if(route.length===0){setStatus('Calculate a route first.','err');return;}const lines=['Name,X,Y,Z'];route.forEach(name=>{const s=systems.find(s=>s.name===name);if(s)lines.push(`${s.name},${s.x},${s.y},${s.z}`);});const blob=new Blob([lines.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='route.csv';a.click();setStatus('Route exported.','ok');}
+function clearAll(){if(!confirm('Clear all systems, chains, and route?'))return;systems=[];chains=[];route=[];renderSystems();renderChains();updateSelects();document.getElementById('routeList').innerHTML='';document.getElementById('route-summary').textContent='';document.getElementById('statsBox').innerHTML='';drawCanvas();localStorage.removeItem('route_opt_state');setStatus('Cleared.','info');}
+function setStatus(msg,type){const el=document.getElementById('status');el.textContent=msg;el.className='status-'+(type||'info');}
+loadState();drawCanvas();
+</script>
+</body>
+</html>
