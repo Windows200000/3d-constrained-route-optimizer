@@ -4,6 +4,8 @@ A browser-based tool for solving the **Travelling Salesman Problem (TSP)** in 3D
 
 Originally built for **Elite Dangerous** route planning, but works for any dataset with 3D coordinates (X, Y, Z).
 
+> **Note:** This project is 100% AI-generated, built entirely through a conversation with [Perplexity AI](https://www.perplexity.ai).
+
 ---
 
 ## Features
@@ -67,4 +69,4 @@ A chain defines a **required subsequence** — the listed systems must appear in
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE)
