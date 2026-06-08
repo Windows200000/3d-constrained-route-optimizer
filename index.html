@@ -189,39 +189,53 @@ function isValidRoute(route,cc){for(const chain of cc){if(chain.items.length===0
 function initProgress(cc){return cc.map(()=>0);}
 function canVisit(name,progress,cc){for(let ci=0;ci<cc.length;ci++){const chain=cc[ci];const p=progress[ci];for(let j=0;j<chain.items.length;j++){if(chain.items[j]===name&&j>p)return false;}}return true;}
 function advanceProgress(name,progress,cc){const np=[...progress];for(let ci=0;ci<cc.length;ci++){const chain=cc[ci];if(np[ci]<chain.items.length&&chain.items[np[ci]]===name)np[ci]++;}return np;}
-function buildGreedyRoute(startName,endName,available,cc){let route=[startName];let progress=advanceProgress(startName,initProgress(cc),cc);let remaining=[...available];while(remaining.length>0){const current=systems.find(s=>s.name===route[route.length-1]);let bestName=null,bestDist=Infinity;for(const name of remaining){if(!canVisit(name,progress,cc))continue;const s=systems.find(s=>s.name===name);const d=dist(current,s);if(d<bestDist){bestDist=d;bestName=name;}}if(!bestName)return null;route.push(bestName);progress=advanceProgress(bestName,progress,cc);remaining=remaining.filter(n=>n!==bestName);}if(endName&&endName!==startName)route.push(endName);return route;}
+function removeOneOccurrence(arr,value){const idx=arr.indexOf(value);if(idx===-1)return arr;return arr.filter((_,i)=>i!==idx);}
+function buildExpandedAvailable(allNames,startName,endName,cc){
+  const requiredCounts={};
+  for(const name of allNames)requiredCounts[name]=1;
+  for(const chain of cc){
+    const localCounts={};
+    for(const name of chain.items)localCounts[name]=(localCounts[name]||0)+1;
+    for(const [name,count] of Object.entries(localCounts))requiredCounts[name]=Math.max(requiredCounts[name]||1,count);
+  }
+  const available=[];
+  for(const name of allNames){
+    if(name===startName)continue;
+    if(endName&&endName!==startName&&name===endName)continue;
+    const totalCopies=requiredCounts[name]||1;
+    for(let i=0;i<totalCopies;i++)available.push(name);
+  }
+  return available;
+}
+function buildGreedyRoute(startName,endName,available,cc){let route=[startName];let progress=advanceProgress(startName,initProgress(cc),cc);let remaining=[...available];while(remaining.length>0){const current=systems.find(s=>s.name===route[route.length-1]);let bestName=null,bestDist=Infinity;for(const name of remaining){if(!canVisit(name,progress,cc))continue;const s=systems.find(s=>s.name===name);const d=dist(current,s);if(d<bestDist){bestDist=d;bestName=name;}}if(!bestName)return null;route.push(bestName);progress=advanceProgress(bestName,progress,cc);remaining=removeOneOccurrence(remaining,bestName);}if(endName&&endName!==startName)route.push(endName);return route;}
 function twoOpt(route,cc,startName,endName){const fixedStart=!!startName;const fixedEnd=!!(endName&&endName!==startName);let improved=true;let best=[...route];let bestD=routeDist(best);while(improved){improved=false;for(let i=fixedStart?1:0;i<best.length-2;i++){for(let j=i+1;j<best.length-(fixedEnd?1:0);j++){const newRoute=[...best.slice(0,i),...best.slice(i,j+1).reverse(),...best.slice(j+1)];if(!isValidRoute(newRoute,cc))continue;const newD=routeDist(newRoute);if(newD<bestD-0.001){best=newRoute;bestD=newD;improved=true;}}}}return best;}
-function perturbRoute(route,startName,endName){const fixStart=!!startName;const fixEnd=!!(endName&&endName!==startName);const inner=route.slice(fixStart?1:0,route.length-(fixEnd?1:0));if(inner.length<2)return route;const i=Math.floor(Math.random()*inner.length);const j=Math.floor(Math.random()*inner.length);[inner[i],inner[j]]=[inner[j],inner[i]];return[...(fixStart?[startName]:[]),...inner,...(fixEnd?[endName]:[])];}  
+function perturbRoute(route,startName,endName){const fixStart=!!startName;const fixEnd=!!(endName&&endName!==startName);const inner=route.slice(fixStart?1:0,route.length-(fixEnd?1:0));if(inner.length<2)return route;const i=Math.floor(Math.random()*inner.length);const j=Math.floor(Math.random()*inner.length);[inner[i],inner[j]]=[inner[j],inner[i]];return[...(fixStart?[startName]:[]),...inner,...(fixEnd?[endName]:[])];}
 function selfCheck(route,cc,startName,endName){
   const issues=[];
-  // Check every system is visited exactly once
   const allNames=systems.map(s=>s.name);
+  const expectedCounts={};
+  for(const name of allNames)expectedCounts[name]=1;
+  for(const chain of cc){
+    const localCounts={};
+    for(const name of chain.items)localCounts[name]=(localCounts[name]||0)+1;
+    for(const [name,count] of Object.entries(localCounts))expectedCounts[name]=Math.max(expectedCounts[name]||1,count);
+  }
   const countMap={};
   for(const n of route)countMap[n]=(countMap[n]||0)+1;
   for(const n of allNames){
-    const c=countMap[n]||0;
-    if(c!==1)issues.push(`"${n}" visited ${c}x (expected 1)`);
+    const got=countMap[n]||0;
+    const exp=expectedCounts[n]||1;
+    if(got!==exp)issues.push(`"${n}" visited ${got}x (expected ${exp})`);
   }
-  // Check no extra systems in route
-  for(const n of route){
-    if(!systems.find(s=>s.name===n))issues.push(`Unknown system "${n}" in route`);
-  }
-  // Check chain constraints
+  for(const n of route){if(!systems.find(s=>s.name===n))issues.push(`Unknown system "${n}" in route`);}
   if(!isValidRoute(route,cc))issues.push('Chain order constraints violated!');
-  // Check start/end
   if(startName&&route[0]!==startName)issues.push(`Route does not start at "${startName}"`);
   if(endName&&endName!==startName&&route[route.length-1]!==endName)issues.push(`Route does not end at "${endName}"`);
   return issues;
 }
 function calculateRoute(){const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value;const cc=chains.filter(c=>c.items.length>0);if(systems.length<2){setStatus('Need at least 2 systems.','err');return;}if(!startName){setStatus('Select a start system.','err');return;}setStatus('Calculating…','info');const t0=Date.now();setTimeout(()=>{try{
   const allNames=systems.map(s=>s.name);
-  // Build available list: exclude start; exclude end only if end !== start
-  let available;
-  if(endName&&endName!==startName){
-    available=allNames.filter(n=>n!==startName&&n!==endName);
-  }else{
-    available=allNames.filter(n=>n!==startName);
-  }
+  const available=buildExpandedAvailable(allNames,startName,endName||null,cc);
   let best=buildGreedyRoute(startName,endName||null,available,cc);
   if(!best){setStatus('Cannot build route: constraint chains may be unsatisfiable.','err');return;}
   let bestD=routeDist(best);
@@ -229,21 +243,24 @@ function calculateRoute(){const startName=document.getElementById('startSel').va
   bestD=routeDist(best);
   const ITERS=Math.min(80,10*systems.length);
   let itersRun=0;
-  for(let iter=0;iter<ITERS;iter++){let candidate=perturbRoute(best,startName,endName||null);if(!isValidRoute(candidate,cc))continue;candidate=twoOpt(candidate,cc,startName,endName||null);const cd=routeDist(candidate);if(cd<bestD-0.001){best=candidate;bestD=cd;}itersRun++;}
+  for(let iter=0;iter<ITERS;iter++){
+    let candidate=perturbRoute(best,startName,endName||null);
+    if(!isValidRoute(candidate,cc))continue;
+    candidate=twoOpt(candidate,cc,startName,endName||null);
+    const cd=routeDist(candidate);
+    if(cd<bestD-0.001){best=candidate;bestD=cd;}
+    itersRun++;
+  }
   const elapsed=Date.now()-t0;
   route=best;
-  // Self-check
   const issues=selfCheck(route,cc,startName,endName||null);
   renderRoute(elapsed,itersRun,issues);
   drawCanvas();
   saveState();
-  if(issues.length>0){
-    setStatus(`⚠ Route found but ${issues.length} issue(s): ${issues[0]}${issues.length>1?' (…)':''}`, 'warn');
-  }else{
-    setStatus(`✔ Route OK · ${route.length} systems · ${bestD.toFixed(1)} ly · ${elapsed}ms`,'ok');
-  }
+  if(issues.length>0){setStatus(`⚠ Route found but ${issues.length} issue(s): ${issues[0]}${issues.length>1?' (…)':''}`,'warn');}
+  else{setStatus(`✔ Route OK · ${route.length} systems · ${bestD.toFixed(1)} ly · ${elapsed}ms`,'ok');}
 }catch(e){setStatus('Error: '+e.message,'err');}},30);}
-function renderRoute(elapsed,itersRun,issues){const list=document.getElementById('routeList');const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value||startName;list.innerHTML='';let totalDist=0;route.forEach((name,i)=>{if(i>0){const a=systems.find(s=>s.name===route[i-1]);const b=systems.find(s=>s.name===name);const d=(a&&b)?dist(a,b):0;totalDist+=d;const arrow=document.createElement('div');arrow.className='route-step';arrow.innerHTML=`<span class="route-arrow">→</span><span class="route-dist">${d.toFixed(1)}</span>`;list.appendChild(arrow);}const node=document.createElement('div');node.className='route-step';const isStart=name===startName&&i===0;const isEnd=name===endName&&i===route.length-1;node.innerHTML=`<span class="route-node ${isStart?'start-node':''} ${isEnd?'end-node':''}}">${i+1}. ${name}</span>`;list.appendChild(node);});document.getElementById('route-summary').textContent=route.length>0?`${route.length} systems · ${totalDist.toFixed(1)} ly`:'';const checkOk=(issues&&issues.length===0);const statsBox=document.getElementById('statsBox');statsBox.innerHTML=route.length>0?`<div><span class="stat-label">Systems</span><span class="stat-val">${route.length}</span></div><div><span class="stat-label">Total dist.</span><span class="stat-val">${totalDist.toFixed(1)} ly</span></div><div><span class="stat-label">Jumps</span><span class="stat-val">${route.length-1}</span></div><div><span class="stat-label">Iterations</span><span class="stat-val">${itersRun!==undefined?itersRun:'—'}</span></div><div><span class="stat-label">Time</span><span class="stat-val">${elapsed!==undefined?elapsed+'ms':'—'}</span></div><div><span class="stat-label">Self-check</span><span class="stat-val ${checkOk?'ok':'err'}">${checkOk?'✔ PASS':'✘ FAIL'}</span></div>${issues&&issues.length>0?issues.map(i=>`<div style="color:var(--danger);font-size:10px;clear:both">${i}</div>`).join(''):''}`:'';}  
+function renderRoute(elapsed,itersRun,issues){const list=document.getElementById('routeList');const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value||startName;list.innerHTML='';let totalDist=0;route.forEach((name,i)=>{if(i>0){const a=systems.find(s=>s.name===route[i-1]);const b=systems.find(s=>s.name===name);const d=(a&&b)?dist(a,b):0;totalDist+=d;const arrow=document.createElement('div');arrow.className='route-step';arrow.innerHTML=`<span class="route-arrow">→</span><span class="route-dist">${d.toFixed(1)}</span>`;list.appendChild(arrow);}const node=document.createElement('div');node.className='route-step';const isStart=name===startName&&i===0;const isEnd=name===endName&&i===route.length-1;node.innerHTML=`<span class="route-node ${isStart?'start-node':''} ${isEnd?'end-node':''}}">${i+1}. ${name}</span>`;list.appendChild(node);});document.getElementById('route-summary').textContent=route.length>0?`${route.length} systems · ${totalDist.toFixed(1)} ly`:'';const checkOk=(issues&&issues.length===0);const statsBox=document.getElementById('statsBox');statsBox.innerHTML=route.length>0?`<div><span class="stat-label">Systems</span><span class="stat-val">${route.length}</span></div><div><span class="stat-label">Total dist.</span><span class="stat-val">${totalDist.toFixed(1)} ly</span></div><div><span class="stat-label">Jumps</span><span class="stat-val">${route.length-1}</span></div><div><span class="stat-label">Iterations</span><span class="stat-val">${itersRun!==undefined?itersRun:'—'}</span></div><div><span class="stat-label">Time</span><span class="stat-val">${elapsed!==undefined?elapsed+'ms':'—'}</span></div><div><span class="stat-label">Self-check</span><span class="stat-val ${checkOk?'ok':'err'}">${checkOk?'✔ PASS':'✘ FAIL'}</span></div>${issues&&issues.length>0?issues.map(i=>`<div style="color:var(--danger);font-size:10px;clear:both">${i}</div>`).join(''):''}`:'';}
 let camRot={x:0.4,y:0.3},camZoom=1,isDragging=false,lastMouse={x:0,y:0},normalizedSystems=[];
 const canvas=document.getElementById('canvas');const ctx=canvas.getContext('2d');
 function normalize(){if(systems.length===0){normalizedSystems=[];return;}const xs=systems.map(s=>s.x),ys=systems.map(s=>s.y),zs=systems.map(s=>s.z);const minX=Math.min(...xs),maxX=Math.max(...xs);const minY=Math.min(...ys),maxY=Math.max(...ys);const minZ=Math.min(...zs),maxZ=Math.max(...zs);const range=Math.max(maxX-minX,maxY-minY,maxZ-minZ,1);normalizedSystems=systems.map(s=>({name:s.name,nx:(s.x-(minX+maxX)/2)/range,ny:(s.y-(minY+maxY)/2)/range,nz:(s.z-(minZ+maxZ)/2)/range}));}
