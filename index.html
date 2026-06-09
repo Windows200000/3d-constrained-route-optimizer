@@ -241,16 +241,16 @@ let _solveDeadline=0, _liveBestDist=Infinity, _tickerInterval=null, _solveT0=0;
 
 // ── Download HTML from GitHub raw ──
 function downloadHTML(){
-  const url='https://raw.githubusercontent.com/Windows200000/3d-constrained-route-optimizer/main/index.html';
-  setStatus('Downloading…','info');
-  fetch(url).then(r=>r.blob()).then(blob=>{
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download='route-optimizer.html';
-    a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href),10000);
-    setStatus('Downloaded route-optimizer.html','ok');
-  }).catch(()=>setStatus('Download failed — try saving the page manually.','err'));
+  const html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+  const blob=new Blob([html],{type:'text/html'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='route-optimizer.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+  setStatus('Downloaded route-optimizer.html','ok');
 }
 
 // ── Ticker (runs on main thread, ticks freely because solver is in a Worker) ──
