@@ -234,8 +234,10 @@ function isValidRoute(r,cc){
     if(!chain.items.length)continue;
     let p=0;
     for(const name of r){if(name===chain.items[p]){p++;if(p===chain.items.length)break;}}
-	console.log(`Chain: \n${JSON.stringify(chain)}\nnot valid for:\n${r}`);
-    if(p<chain.items.length)return false;
+    if(p<chain.items.length){
+	  console.log(`Chain: \n${JSON.stringify(chain)}\nnot valid for:\n${r}`);
+	  return false;
+	}
   }
   return true;
 }
