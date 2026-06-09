@@ -133,8 +133,9 @@
 <body>
 <header>
   <h1>&#x2B21; 3D ROUTE OPTIMIZER</h1>
-  <span>TSP with chain ordering constraints &middot; 3D visualization &middot; B&amp;B + 2-opt/3-opt solver</span>
+  <span>TSP with chain ordering constraints &middot; 3D visualization &middot; B&amp;B + ILS solver</span>
   <div style="flex:1"></div>
+  <button class="btn btn-sm" onclick="downloadHTML()" title="Download this file directly">&#x2B07; Download HTML</button>
   <button class="btn btn-sm" onclick="exportCSV()">&#x2B07; Export Route CSV</button>
   <button class="btn btn-sm" onclick="clearAll()">&#x2715; Clear All</button>
 </header>
@@ -235,107 +236,58 @@
 </div>
 <script>
 let systems=[],chains=[],route=[],chainIdSeq=0;
+let _solverWorker=null;
+let _solveDeadline=0, _liveBestDist=Infinity, _tickerInterval=null, _solveT0=0;
 
-// ── Live solve state (shared between solver + ticker) ──
-let _solveDeadline=0, _liveBestDist=Infinity, _tickerInterval=null;
+// ── Download HTML from GitHub raw ──
+function downloadHTML(){
+  const url='https://raw.githubusercontent.com/Windows200000/3d-constrained-route-optimizer/main/index.html';
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='route-optimizer.html';
+  a.click();
+}
 
+// ── Ticker (runs on main thread, ticks freely because solver is in a Worker) ──
 function _startTicker(timeoutMs){
-  _solveDeadline = Date.now()+timeoutMs;
-  _liveBestDist = Infinity;
-  if(_tickerInterval) clearInterval(_tickerInterval);
-  _tickerInterval = setInterval(()=>{
-    const remaining = Math.max(0, _solveDeadline - Date.now());
-    const remSec = (remaining/1000).toFixed(1);
-    const bestStr = isFinite(_liveBestDist) ? ` · best ${_liveBestDist.toFixed(1)} ly` : '';
-    setStatus(`Running ILS+B\u0026B\u2026 (${remSec}s${bestStr})`,'info');
-    if(remaining<=0) _stopTicker();
-  }, 100);
+  _solveDeadline=Date.now()+timeoutMs;
+  _liveBestDist=Infinity;
+  if(_tickerInterval)clearInterval(_tickerInterval);
+  _tickerInterval=setInterval(()=>{
+    const remaining=Math.max(0,_solveDeadline-Date.now());
+    const remSec=(remaining/1000).toFixed(1);
+    const bestStr=isFinite(_liveBestDist)?` \u00b7 best ${_liveBestDist.toFixed(1)} ly`:'';
+    setStatus(`Running\u2026 (${remSec}s${bestStr})`,'info');
+  },100);
 }
-function _stopTicker(){
-  if(_tickerInterval){ clearInterval(_tickerInterval); _tickerInterval=null; }
-}
+function _stopTicker(){if(_tickerInterval){clearInterval(_tickerInterval);_tickerInterval=null;}}
 
 // ── Timeout persistence ──
 const TIMEOUT_KEY='route_opt_timeout';
-function saveTimeout(){
-  const v=document.getElementById('timeoutSec').value.trim();
-  localStorage.setItem(TIMEOUT_KEY,v);
-}
-function loadTimeout(){
-  const raw=localStorage.getItem(TIMEOUT_KEY);
-  if(raw!==null)document.getElementById('timeoutSec').value=raw;
-}
-function getTimeoutMs(){
-  const v=parseFloat(document.getElementById('timeoutSec').value);
-  return (isNaN(v)||v<=0)?5000:Math.round(v*1000);
-}
-function setTimeoutPreset(s){
-  document.getElementById('timeoutSec').value=s;
-  saveTimeout();
-}
+function saveTimeout(){localStorage.setItem(TIMEOUT_KEY,document.getElementById('timeoutSec').value.trim());}
+function loadTimeout(){const raw=localStorage.getItem(TIMEOUT_KEY);if(raw!==null)document.getElementById('timeoutSec').value=raw;}
+function getTimeoutMs(){const v=parseFloat(document.getElementById('timeoutSec').value);return(isNaN(v)||v<=0)?5000:Math.round(v*1000);}
+function setTimeoutPreset(s){document.getElementById('timeoutSec').value=s;saveTimeout();}
 
 // ── Layout persistence ──
 const LAYOUT_KEY='route_opt_layout';
-function saveLayout(){
-  localStorage.setItem(LAYOUT_KEY,JSON.stringify({
-    leftW: document.getElementById('leftCol').offsetWidth,
-    rightW: document.getElementById('rightCol').offsetWidth,
-    rightChainsW: document.getElementById('rightChains').offsetWidth
-  }));
-}
-function loadLayout(){
-  try{
-    const raw=localStorage.getItem(LAYOUT_KEY);
-    if(!raw)return;
-    const l=JSON.parse(raw);
-    if(l.leftW)   document.getElementById('leftCol').style.width    = Math.max(140,Math.min(400,l.leftW))+'px';
-    if(l.rightW)  document.getElementById('rightCol').style.width   = Math.max(240,Math.min(700,l.rightW))+'px';
-    if(l.rightChainsW) document.getElementById('rightChains').style.width = Math.max(160,Math.min(500,l.rightChainsW))+'px';
-  }catch(e){}
-}
+function saveLayout(){localStorage.setItem(LAYOUT_KEY,JSON.stringify({leftW:document.getElementById('leftCol').offsetWidth,rightW:document.getElementById('rightCol').offsetWidth,rightChainsW:document.getElementById('rightChains').offsetWidth}));}
+function loadLayout(){try{const raw=localStorage.getItem(LAYOUT_KEY);if(!raw)return;const l=JSON.parse(raw);if(l.leftW)document.getElementById('leftCol').style.width=Math.max(140,Math.min(400,l.leftW))+'px';if(l.rightW)document.getElementById('rightCol').style.width=Math.max(240,Math.min(700,l.rightW))+'px';if(l.rightChainsW)document.getElementById('rightChains').style.width=Math.max(160,Math.min(500,l.rightChainsW))+'px';}catch(e){}}
 
 // ── Resize logic ──
 (function(){
-  function makeDragResizer(handle, onDrag) {
-    let dragging=false, startX=0;
-    handle.addEventListener('mousedown', e=>{
-      dragging=true; startX=e.clientX;
-      handle.classList.add('active');
-      document.body.style.cursor='col-resize';
-      document.body.style.userSelect='none';
-      e.preventDefault();
-    });
-    document.addEventListener('mousemove', e=>{
-      if(!dragging)return;
-      onDrag(e.clientX-startX);
-      startX=e.clientX;
-    });
-    document.addEventListener('mouseup', ()=>{
-      if(!dragging)return;
-      dragging=false; handle.classList.remove('active');
-      document.body.style.cursor=''; document.body.style.userSelect='';
-      saveLayout();
-      drawCanvas();
-    });
+  function makeDragResizer(handle,onDrag){
+    let dragging=false,startX=0;
+    handle.addEventListener('mousedown',e=>{dragging=true;startX=e.clientX;handle.classList.add('active');document.body.style.cursor='col-resize';document.body.style.userSelect='none';e.preventDefault();});
+    document.addEventListener('mousemove',e=>{if(!dragging)return;onDrag(e.clientX-startX);startX=e.clientX;});
+    document.addEventListener('mouseup',()=>{if(!dragging)return;dragging=false;handle.classList.remove('active');document.body.style.cursor='';document.body.style.userSelect='';saveLayout();drawCanvas();});
   }
-  makeDragResizer(document.getElementById('rh-left'), dx=>{
-    const lc=document.getElementById('leftCol');
-    const nw=Math.max(140,Math.min(400,lc.offsetWidth+dx));
-    lc.style.width=nw+'px';
-  });
-  makeDragResizer(document.getElementById('rh-right'), dx=>{
-    const rc=document.getElementById('rightCol');
-    const nw=Math.max(240,Math.min(700,rc.offsetWidth-dx));
-    rc.style.width=nw+'px';
-  });
-  makeDragResizer(document.getElementById('rh-inner'), dx=>{
-    const rc=document.getElementById('rightChains');
-    const nw=Math.max(160,Math.min(500,rc.offsetWidth-dx));
-    rc.style.width=nw+'px';
-  });
+  makeDragResizer(document.getElementById('rh-left'),dx=>{const lc=document.getElementById('leftCol');lc.style.width=Math.max(140,Math.min(400,lc.offsetWidth+dx))+'px';});
+  makeDragResizer(document.getElementById('rh-right'),dx=>{const rc=document.getElementById('rightCol');rc.style.width=Math.max(240,Math.min(700,rc.offsetWidth-dx))+'px';});
+  makeDragResizer(document.getElementById('rh-inner'),dx=>{const rc=document.getElementById('rightChains');rc.style.width=Math.max(160,Math.min(500,rc.offsetWidth-dx))+'px';});
 })();
 
-function saveState(){const st={systems,chains,start:document.getElementById('startSel').value,end:document.getElementById('endSel').value};localStorage.setItem('route_opt_state',JSON.stringify(st));}
+function saveState(){localStorage.setItem('route_opt_state',JSON.stringify({systems,chains,start:document.getElementById('startSel').value,end:document.getElementById('endSel').value}));}
 function loadState(){try{const raw=localStorage.getItem('route_opt_state');if(!raw)return;const st=JSON.parse(raw);systems=st.systems||[];chains=st.chains||[];chainIdSeq=chains.reduce((m,c)=>Math.max(m,c.id||0),0)+1;renderSystems();renderChains();updateSelects(st.start,st.end);}catch(e){}}
 function addManual(){const name=document.getElementById('manualName').value.trim();const x=parseFloat(document.getElementById('manualX').value)||0;const y=parseFloat(document.getElementById('manualY').value)||0;const z=parseFloat(document.getElementById('manualZ').value)||0;if(!name){setStatus('Enter a name.','err');return;}if(systems.find(s=>s.name.toLowerCase()===name.toLowerCase())){setStatus(`"${name}" already exists.`,'err');return;}systems.push({name,x,y,z});['manualName','manualX','manualY','manualZ'].forEach(id=>document.getElementById(id).value='');renderSystems();updateSelects();saveState();setStatus(`Added "${name}".`,'ok');}
 function importCSV(){const text=document.getElementById('csvInput').value.trim();if(!text){setStatus('Paste CSV first.','err');return;}parseCSVText(text);}
@@ -350,51 +302,52 @@ function removeChainItem(chainId,idx){const c=chains.find(c=>c.id===chainId);if(
 function renderChains(){const panel=document.getElementById('chainsPanel');panel.innerHTML='';if(chains.length===0){panel.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:6px;font-style:italic">No chains yet.<br>Click "+ New Chain" below.</div>';return;}chains.forEach((chain,ci)=>{const block=document.createElement('div');block.className='chain-block';const header=document.createElement('div');header.className='chain-header';header.innerHTML=`<span>Chain ${ci+1}</span><button class="btn btn-sm btn-danger" onclick="removeChain(${chain.id})">&#x2715;</button>`;const zone=document.createElement('div');zone.className='chain-drop-zone';zone.dataset.chainId=chain.id;if(chain.items.length===0){zone.innerHTML='<span class="chain-empty">Drop systems here</span>';}else{chain.items.forEach((name,idx)=>{if(idx>0){const arr=document.createElement('span');arr.textContent='\u2192';arr.style.cssText='color:var(--text-muted);font-size:10px;align-self:center';zone.appendChild(arr);}const item=document.createElement('div');item.className='chain-item';item.draggable=true;item.dataset.chainId=chain.id;item.dataset.idx=idx;item.innerHTML=`${name}<span class="remove-item" onclick="removeChainItem(${chain.id},${idx})">&#x2715;</span>`;item.addEventListener('dragstart',e=>{e.dataTransfer.setData('chain-move',JSON.stringify({chainId:chain.id,idx}));e.dataTransfer.effectAllowed='move';});zone.appendChild(item);});}zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over');});zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-over');const chainId=parseInt(zone.dataset.chainId);const c=chains.find(c=>c.id===chainId);if(!c)return;const moveData=e.dataTransfer.getData('chain-move');if(moveData){const{chainId:srcId,idx:srcIdx}=JSON.parse(moveData);const src=chains.find(c=>c.id===srcId);if(!src)return;const name=src.items[srcIdx];src.items.splice(srcIdx,1);c.items.push(name);renderChains();saveState();return;}const name=e.dataTransfer.getData('text/plain');if(!name||!systems.find(s=>s.name===name))return;c.items.push(name);renderChains();saveState();});block.appendChild(header);block.appendChild(zone);panel.appendChild(block);});}
 
 function clearStats(){document.getElementById('statsContent').innerHTML='<span class="stat-empty">No route calculated yet.</span>';document.getElementById('statsBox').classList.remove('has-results');}
-function exportChainsCSV(){const cc=chains.filter(c=>c.items.length>0);if(!cc.length){setStatus('No chains to export.','err');return;}const lines=['Chain,Position,Name,X,Y,Z'];cc.forEach((chain,ci)=>{chain.items.forEach((name,pos)=>{const s=systems.find(s=>s.name===name);const x=s?s.x:'',y=s?s.y:'',z=s?s.z:'';lines.push(`${ci+1},${pos+1},${name},${x},${y},${z}`);});});const blob=new Blob([lines.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chains.csv';a.click();setStatus(`Exported ${cc.length} chain(s) as CSV.`,'ok');}
+function exportChainsCSV(){const cc=chains.filter(c=>c.items.length>0);if(!cc.length){setStatus('No chains to export.','err');return;}const lines=['Chain,Position,Name,X,Y,Z'];cc.forEach((chain,ci)=>{chain.items.forEach((name,pos)=>{const s=systems.find(s=>s.name===name);lines.push(`${ci+1},${pos+1},${name},${s?s.x:''},${s?s.y:''},${s?s.z:''}`);});});const blob=new Blob([lines.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chains.csv';a.click();setStatus(`Exported ${cc.length} chain(s) as CSV.`,'ok');}
 function loadChainsFile(evt){const file=evt.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{parseChainsCSVText(e.target.result);evt.target.value='';};reader.readAsText(file);}
 function importChainsCSV(){const text=document.getElementById('chainsInput').value.trim();if(!text){setStatus('Paste chains CSV first.','err');return;}parseChainsCSVText(text);}
 function parseChainsCSVText(text){const lines=text.trim().split(/\r?\n/);let start=0;const firstCols=lines[0].split(',');if(firstCols[0].toLowerCase().includes('chain')||isNaN(parseInt(firstCols[0])))start=1;let sysAdded=0,chCount=0;const chainMap={};for(let i=start;i<lines.length;i++){const parts=lines[i].split(',').map(s=>s.trim().replace(/^"|"$/g,''));if(!parts[0])continue;const chainIdx=parseInt(parts[0]);const pos=parseInt(parts[1]);const name=parts[2];const x=parseFloat(parts[3])||0;const y=parseFloat(parts[4])||0;const z=parseFloat(parts[5])||0;if(!name||isNaN(chainIdx)||isNaN(pos))continue;if(!systems.find(s=>s.name.toLowerCase()===name.toLowerCase())){systems.push({name,x,y,z});sysAdded++;}if(!chainMap[chainIdx]){chainMap[chainIdx]=[];chCount++;}chainMap[chainIdx].push({pos,name});}if(!chCount){setStatus('No valid chain data found.','err');return;}chains=Object.values(chainMap).map(entries=>({id:chainIdSeq++,items:entries.sort((a,b)=>a.pos-b.pos).map(e=>e.name)}));renderSystems();renderChains();updateSelects();saveState();setStatus(`Imported ${chCount} chain(s), ${sysAdded} new system(s).`,'ok');document.getElementById('chainsInput').value='';}
 
+// ── Solver (inlined as Blob Worker so it runs off-thread) ──
+const WORKER_SRC = `
 function dist(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2);}
-function routeDist(names){let d=0;for(let i=0;i<names.length-1;i++){const a=systems.find(s=>s.name===names[i]);const b=systems.find(s=>s.name===names[i+1]);if(a&&b)d+=dist(a,b);}return d;}
+function routeDist(names,sysMap){let d=0;for(let i=0;i<names.length-1;i++){const a=sysMap[names[i]],b=sysMap[names[i+1]];if(a&&b)d+=dist(a,b);}return d;}
 function initProgress(cc){return cc.map(()=>0);}
 function advanceProgress(name,progress,cc){const np=[...progress];for(let ci=0;ci<cc.length;ci++){while(np[ci]<cc[ci].items.length&&cc[ci].items[np[ci]]===name)np[ci]++;}return np;}
 function canVisit(name,visited,progress,cc){if(!visited.has(name))return true;for(let ci=0;ci<cc.length;ci++){const p=progress[ci];if(p<cc[ci].items.length&&cc[ci].items[p]===name)return true;}return false;}
-function getCandidates(visited,progress,cc,endName){const out=[];for(const sys of systems){const name=sys.name;if(canVisit(name,visited,progress,cc))out.push(name);}return out;}
-function chainsComplete(progress,cc){for(let ci=0;ci<cc.length;ci++)if(progress[ci]<cc[ci].items.length)return false;return true;}
+function getCandidates(systems,visited,progress,cc){return systems.map(s=>s.name).filter(name=>canVisit(name,visited,progress,cc));}
+function chainsComplete(progress,cc){return cc.every((c,i)=>progress[i]>=c.items.length);}
 function isValidRoute(r,cc){for(const chain of cc){if(!chain.items.length)continue;let p=0;for(const name of r){if(name===chain.items[p]){p++;if(p===chain.items.length)break;}}if(p<chain.items.length)return false;}return true;}
 function mstCost(nodes){if(nodes.length<2)return 0;const n=nodes.length;const inMST=new Uint8Array(n);const minEdge=new Float64Array(n).fill(Infinity);minEdge[0]=0;let total=0;for(let iter=0;iter<n;iter++){let u=-1;for(let i=0;i<n;i++)if(!inMST[i]&&(u===-1||minEdge[i]<minEdge[u]))u=i;inMST[u]=1;total+=minEdge[u];for(let v=0;v<n;v++){if(inMST[v])continue;const d=dist(nodes[u],nodes[v]);if(d<minEdge[v])minEdge[v]=d;}}return total;}
-function lowerBound(partialDist,currentSys,unvisitedSystems,endSys){if(unvisitedSystems.length===0)return partialDist+(endSys?dist(currentSys,endSys):0);let minOut=Infinity;for(const s of unvisitedSystems){const d=dist(currentSys,s);if(d<minOut)minOut=d;}const mst=mstCost(unvisitedSystems);let minIn=0;if(endSys){minIn=Infinity;for(const s of unvisitedSystems){const d=dist(s,endSys);if(d<minIn)minIn=d;}}return partialDist+minOut+mst+minIn;}
-function buildGreedyRoute(startName,endName,cc){const visited=new Set([startName]);let progress=advanceProgress(startName,initProgress(cc),cc);const r=[startName];while(true){const candidates=getCandidates(visited,progress,cc,endName);if(candidates.length===0)break;const cur=systems.find(s=>s.name===r[r.length-1]);let best=null,bestD=Infinity;for(const name of candidates){const s=systems.find(s=>s.name===name);const d=dist(cur,s);if(d<bestD){bestD=d;best=name;}}if(!best)break;r.push(best);visited.add(best);progress=advanceProgress(best,progress,cc);}if(!chainsComplete(progress,cc))return null;if(endName&&endName!==startName&&r[r.length-1]!==endName)r.push(endName);return r;}
-function twoOpt(r,cc,deadline){const n=r.length;const fixHead=1,fixTail=n-2;let improved=true;while(improved&&Date.now()<deadline){improved=false;for(let i=fixHead;i<=fixTail-1&&Date.now()<deadline;i++){for(let j=i+1;j<=fixTail;j++){const candidate=[...r.slice(0,i),...r.slice(i,j+1).reverse(),...r.slice(j+1)];if(!isValidRoute(candidate,cc))continue;if(routeDist(candidate)<routeDist(r)-1e-9){r=candidate;improved=true;break;}}if(improved)break;}}return r;}
-function orOpt(r,cc,deadline){const n=r.length;let improved=true;while(improved&&Date.now()<deadline){improved=false;const baseD=routeDist(r);outer:for(let i=1;i<n-1&&Date.now()<deadline;i++){for(let j=1;j<n-1;j++){if(j===i)continue;const candidate=r.filter((_,idx)=>idx!==i);candidate.splice(j,0,r[i]);if(!isValidRoute(candidate,cc))continue;if(routeDist(candidate)<baseD-1e-9){r=candidate;improved=true;break outer;}}}}return r;}
-function doubleBridge(r,cc){const n=r.length;if(n<8)return r;const interior=r.slice(1,n-1);const len=interior.length;if(len<4)return r;const a=1+Math.floor(Math.random()*Math.floor(len/4));const b=1+Math.floor(len/4)+Math.floor(Math.random()*Math.floor(len/4));const c=1+Math.floor(len/2)+Math.floor(Math.random()*Math.floor(len/4));const candidate=[...r.slice(0,a),...r.slice(c,n-1),...r.slice(b,c),...r.slice(a,b),...r.slice(n-1)];return isValidRoute(candidate,cc)?candidate:r;}
-function iteratedLocalSearch(startName,endName,cc,timeLimit){
+function lowerBound(partialDist,currentSys,unvisited,endSys){if(unvisited.length===0)return partialDist+(endSys?dist(currentSys,endSys):0);let minOut=Infinity;for(const s of unvisited)minOut=Math.min(minOut,dist(currentSys,s));const mst=mstCost(unvisited);let minIn=0;if(endSys){minIn=Infinity;for(const s of unvisited)minIn=Math.min(minIn,dist(s,endSys));}return partialDist+minOut+mst+minIn;}
+function buildGreedyRoute(startName,endName,cc,systems,sysMap){const visited=new Set([startName]);let progress=advanceProgress(startName,initProgress(cc),cc);const r=[startName];while(true){const cands=getCandidates(systems,visited,progress,cc);if(!cands.length)break;const cur=sysMap[r[r.length-1]];let best=null,bestD=Infinity;for(const name of cands){const d=dist(cur,sysMap[name]);if(d<bestD){bestD=d;best=name;}}if(!best)break;r.push(best);visited.add(best);progress=advanceProgress(best,progress,cc);}if(!chainsComplete(progress,cc))return null;if(endName&&endName!==startName&&r[r.length-1]!==endName)r.push(endName);return r;}
+function twoOpt(r,cc,deadline,sysMap){let improved=true;const fix0=0,fixN=r.length-1;while(improved&&Date.now()<deadline){improved=false;for(let i=fix0+1;i<=fixN-2&&Date.now()<deadline;i++){for(let j=i+1;j<=fixN-1;j++){const candidate=[...r.slice(0,i),...r.slice(i,j+1).reverse(),...r.slice(j+1)];if(!isValidRoute(candidate,cc))continue;if(routeDist(candidate,sysMap)<routeDist(r,sysMap)-1e-9){r=candidate;improved=true;break;}}if(improved)break;}}return r;}
+function orOpt(r,cc,deadline,sysMap){let improved=true;const n=r.length;while(improved&&Date.now()<deadline){improved=false;const baseD=routeDist(r,sysMap);outer:for(let i=1;i<n-1&&Date.now()<deadline;i++){for(let j=1;j<n-1;j++){if(j===i)continue;const c=r.filter((_,idx)=>idx!==i);c.splice(j,0,r[i]);if(!isValidRoute(c,cc))continue;if(routeDist(c,sysMap)<baseD-1e-9){r=c;improved=true;break outer;}}}}return r;}
+function doubleBridge(r,cc){const n=r.length;if(n<8)return r;const interior=r.slice(1,n-1);const len=interior.length;if(len<4)return r;const a=1+Math.floor(Math.random()*Math.floor(len/4));const b=1+Math.floor(len/4)+Math.floor(Math.random()*Math.floor(len/4));const c=1+Math.floor(len/2)+Math.floor(Math.random()*Math.floor(len/4));const cand=[...r.slice(0,a),...r.slice(c,n-1),...r.slice(b,c),...r.slice(a,b),...r.slice(n-1)];return isValidRoute(cand,cc)?cand:r;}
+function iteratedLocalSearch(startName,endName,cc,systems,sysMap,timeLimit){
   const deadline=Date.now()+timeLimit;
-  let best=buildGreedyRoute(startName,endName,cc);
+  let best=buildGreedyRoute(startName,endName,cc,systems,sysMap);
   if(!best)return null;
-  best=twoOpt(best,cc,deadline);
-  best=orOpt(best,cc,deadline);
-  let bestD=routeDist(best);
-  if(bestD<_liveBestDist){_liveBestDist=bestD;}
+  best=twoOpt(best,cc,deadline,sysMap);
+  best=orOpt(best,cc,deadline,sysMap);
+  let bestD=routeDist(best,sysMap);
+  self.postMessage({type:'progress',bestDist:bestD});
   while(Date.now()<deadline){
-    let candidate=doubleBridge(best,cc);
-    candidate=twoOpt(candidate,cc,deadline);
-    candidate=orOpt(candidate,cc,deadline);
-    const d=routeDist(candidate);
-    if(d<bestD-1e-9){bestD=d;best=candidate;}
-    if(bestD<_liveBestDist){_liveBestDist=bestD;}
+    let cand=doubleBridge(best,cc);
+    cand=twoOpt(cand,cc,deadline,sysMap);
+    cand=orOpt(cand,cc,deadline,sysMap);
+    const d=routeDist(cand,sysMap);
+    if(d<bestD-1e-9){bestD=d;best=cand;self.postMessage({type:'progress',bestDist:bestD});}
   }
   return{route:best,dist:bestD};
 }
-function branchAndBound(startName,endName,cc,timeLimit){
+function branchAndBound(startName,endName,cc,systems,sysMap,timeLimit){
   const ilsTime=Math.floor(timeLimit*0.40);
   const deadlineBB=Date.now()+timeLimit;
-  const ilsResult=iteratedLocalSearch(startName,endName,cc,ilsTime);
-  let bestRoute=ilsResult?ilsResult.route:buildGreedyRoute(startName,endName,cc);
-  let bestDist=bestRoute?routeDist(bestRoute):Infinity;
-  if(bestDist<_liveBestDist){_liveBestDist=bestDist;}
-  const endSys=endName?systems.find(s=>s.name===endName):null;
+  const ilsResult=iteratedLocalSearch(startName,endName,cc,systems,sysMap,ilsTime);
+  let bestRoute=ilsResult?ilsResult.route:buildGreedyRoute(startName,endName,cc,systems,sysMap);
+  let bestDist=bestRoute?routeDist(bestRoute,sysMap):Infinity;
+  if(isFinite(bestDist))self.postMessage({type:'progress',bestDist});
+  const endSys=endName?sysMap[endName]:null;
   let timedOut=false,nodesChecked=0;
   const initVis=new Set([startName]);
   const initProg=advanceProgress(startName,initProgress(cc),cc);
@@ -403,32 +356,47 @@ function branchAndBound(startName,endName,cc,timeLimit){
     if(Date.now()>=deadlineBB){timedOut=true;break;}
     const{route,visited,progress,partialDist}=stack.pop();
     nodesChecked++;
-    const candidates=getCandidates(visited,progress,cc,endName);
+    const candidates=getCandidates(systems,visited,progress,cc);
     if(candidates.length===0){
       if(!chainsComplete(progress,cc))continue;
-      const curSys=systems.find(s=>s.name===route[route.length-1]);
+      const curSys=sysMap[route[route.length-1]];
       const fullDist=partialDist+(endSys&&route[route.length-1]!==endName?dist(curSys,endSys):0);
-      if(fullDist<bestDist){bestDist=fullDist;bestRoute=(endName&&endName!==startName&&route[route.length-1]!==endName)?[...route,endName]:[...route];}
-      if(bestDist<_liveBestDist){_liveBestDist=bestDist;}
+      if(fullDist<bestDist){bestDist=fullDist;bestRoute=(endName&&endName!==startName&&route[route.length-1]!==endName)?[...route,endName]:[...route];self.postMessage({type:'progress',bestDist});}
       continue;
     }
-    const curSys=systems.find(s=>s.name===route[route.length-1]);
-    const expanded=candidates.map(name=>{const s=systems.find(s=>s.name===name);return{name,sys:s,d:dist(curSys,s)};}).sort((a,b)=>a.d-b.d);
+    const curSys=sysMap[route[route.length-1]];
+    const expanded=candidates.map(name=>{const s=sysMap[name];return{name,sys:s,d:dist(curSys,s)};}).sort((a,b)=>a.d-b.d);
     for(let i=expanded.length-1;i>=0;i--){
       const{name,sys,d}=expanded[i];
       const newPartial=partialDist+d;
-      const newProgress=advanceProgress(name,progress,cc);
-      const newVisited=new Set(visited);
-      newVisited.add(name);
-      const remainingSys=systems.filter(s=>!newVisited.has(s.name)&&s.name!==endName);
-      const lb=lowerBound(newPartial,sys,remainingSys,endSys);
-      if(lb>=bestDist)continue;
-      stack.push({route:[...route,name],visited:newVisited,progress:newProgress,partialDist:newPartial});
+      const newProg=advanceProgress(name,progress,cc);
+      const newVis=new Set(visited);newVis.add(name);
+      const remaining=systems.filter(s=>!newVis.has(s.name)&&s.name!==endName);
+      if(lowerBound(newPartial,sys,remaining,endSys)>=bestDist)continue;
+      stack.push({route:[...route,name],visited:newVis,progress:newProg,partialDist:newPartial});
     }
   }
   return{route:bestRoute,dist:bestDist,timedOut,nodesChecked};
 }
+self.onmessage=function(e){
+  const{systems,chains,startName,endName,timeLimit}=e.data;
+  const sysMap={};
+  for(const s of systems)sysMap[s.name]=s;
+  const cc=chains.filter(c=>c.items.length>0);
+  try{
+    const result=branchAndBound(startName,endName,cc,systems,sysMap,timeLimit);
+    self.postMessage({type:'done',result});
+  }catch(err){
+    self.postMessage({type:'error',message:err.message});
+  }
+};
+`;
+
+function isValidRoute(r,cc){for(const chain of cc){if(!chain.items.length)continue;let p=0;for(const name of r){if(name===chain.items[p]){p++;if(p===chain.items.length)break;}}if(p<chain.items.length)return false;}return true;}
+function dist(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2);}
+function routeDist(names){let d=0;for(let i=0;i<names.length-1;i++){const a=systems.find(s=>s.name===names[i]),b=systems.find(s=>s.name===names[i+1]);if(a&&b)d+=dist(a,b);}return d;}
 function selfCheck(r,cc,startName,endName){const issues=[];if(!isValidRoute(r,cc))issues.push('Chain order constraints violated!');if(startName&&r[0]!==startName)issues.push(`Does not start at "${startName}"`);if(endName&&endName!==startName&&r[r.length-1]!==endName)issues.push(`Does not end at "${endName}"`);const inRoute=new Set(r);for(const sys of systems){if(!inRoute.has(sys.name))issues.push(`"${sys.name}" missing from route`);}return issues;}
+
 function calculateRoute(){
   const startName=document.getElementById('startSel').value;
   const endName=document.getElementById('endSel').value||null;
@@ -436,167 +404,110 @@ function calculateRoute(){
   cc.forEach(c=>{c.items=c.items.filter((v,i)=>i===0||v!==c.items[i-1]);});
   if(systems.length<2){setStatus('Need at least 2 systems.','err');return;}
   if(!startName){setStatus('Select a start system.','err');return;}
+  if(_solverWorker){_solverWorker.terminate();_solverWorker=null;_stopTicker();}
   const TIME_LIMIT=getTimeoutMs();
+  _solveT0=Date.now();
   _startTicker(TIME_LIMIT);
-  const t0=Date.now();
-  setTimeout(()=>{
-    try{
-      const{route:best,dist:bestDist,timedOut,nodesChecked}=branchAndBound(startName,endName,cc,TIME_LIMIT);
+  const blob=new Blob([WORKER_SRC],{type:'application/javascript'});
+  const workerUrl=URL.createObjectURL(blob);
+  _solverWorker=new Worker(workerUrl);
+  _solverWorker.onmessage=function(e){
+    const msg=e.data;
+    if(msg.type==='progress'){
+      _liveBestDist=msg.bestDist;
+    } else if(msg.type==='done'){
       _stopTicker();
+      _solverWorker.terminate();_solverWorker=null;
+      URL.revokeObjectURL(workerUrl);
+      const{route:best,dist:bestDist,timedOut,nodesChecked}=msg.result;
+      const elapsed=Date.now()-_solveT0;
       if(!best){setStatus('No valid route found \u2014 check chain constraints.','err');return;}
-      const elapsed=Date.now()-t0;
       route=best;
       const issues=selfCheck(route,cc,startName,endName);
-      const optimality=timedOut?'best-in-time':'optimal';
-      renderRoute(elapsed,nodesChecked,issues,optimality);
+      renderRoute(elapsed,nodesChecked,issues,timedOut?'best-in-time':'optimal');
       drawCanvas();
       saveState();
       if(issues.length>0)setStatus(`\u26a0 ${issues[0]}`,'warn');
-      else if(timedOut)setStatus(`\u23f1 ILS+B&B timeout \u2014 best found: ${bestDist.toFixed(1)} ly \u00b7 ${nodesChecked} nodes \u00b7 ${elapsed}ms`,'warn');
-      else setStatus(`\u2714 Optimal: ${bestDist.toFixed(1)} ly \u00b7 ${nodesChecked} nodes \u00b7 ${elapsed}ms`,'ok');
-    }catch(e){
+      else if(timedOut)setStatus(`\u23f1 Best found: ${bestDist.toFixed(1)} ly \u00b7 ${nodesChecked.toLocaleString()} nodes \u00b7 ${elapsed}ms`,'warn');
+      else setStatus(`\u2714 Optimal: ${bestDist.toFixed(1)} ly \u00b7 ${nodesChecked.toLocaleString()} nodes \u00b7 ${elapsed}ms`,'ok');
+    } else if(msg.type==='error'){
       _stopTicker();
-      setStatus('Error: '+e.message,'err');
-      console.error(e);
+      _solverWorker.terminate();_solverWorker=null;
+      URL.revokeObjectURL(workerUrl);
+      setStatus('Error: '+msg.message,'err');
     }
-  },20);
-}
-function renderRoute(elapsed,nodeCount,issues,optimality){const list=document.getElementById('routeList');const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value||startName;list.innerHTML='';let totalDist=0;route.forEach((name,i)=>{if(i>0){const a=systems.find(s=>s.name===route[i-1]);const b=systems.find(s=>s.name===name);const d=(a&&b)?dist(a,b):0;totalDist+=d;const arrow=document.createElement('div');arrow.className='route-step';arrow.innerHTML=`<span class="route-arrow">\u2192</span><span class="route-dist">${d.toFixed(1)}</span>`;list.appendChild(arrow);}const node=document.createElement('div');node.className='route-step';const isStart=name===startName&&i===0;const isEnd=name===endName&&i===route.length-1;const span=document.createElement('span');span.className='route-node'+(isStart?' start-node':isEnd?' end-node':'');span.textContent=`${i+1}. ${name}`;node.appendChild(span);list.appendChild(node);});document.getElementById('route-summary').textContent=route.length>0?`${route.length} stops \u00b7 ${totalDist.toFixed(1)} ly`:'';const checkOk=issues&&issues.length===0;const isOptimal=optimality==='optimal';if(route.length>0){document.getElementById('statsContent').innerHTML=`<div><span class="stat-label">Systems</span><span class="stat-val">${systems.length}</span></div>`+`<div><span class="stat-label">Route stops</span><span class="stat-val">${route.length}</span></div>`+`<div><span class="stat-label">Total dist.</span><span class="stat-val">${totalDist.toFixed(1)} ly</span></div>`+`<div><span class="stat-label">Jumps</span><span class="stat-val">${route.length-1}</span></div>`+`<div><span class="stat-label">B&amp;B nodes</span><span class="stat-val">${nodeCount.toLocaleString()}</span></div>`+`<div><span class="stat-label">Time</span><span class="stat-val">${elapsed}ms</span></div>`+`<div><span class="stat-label">Optimality</span><span class="stat-val ${isOptimal?'ok':''}">${isOptimal?'\u2605 Optimal':'\u23f1 Best/time'}</span></div>`+`<div><span class="stat-label">Self-check</span><span class="stat-val ${checkOk?'ok':'err'}">${checkOk?'\u2714 PASS':'\u2718 FAIL'}</span></div>`+(issues&&issues.length>0?issues.map(i=>`<div style="color:var(--danger);font-size:10px;clear:both">${i}</div>`).join(''):'');document.getElementById('statsBox').classList.add('has-results');}}
-
-// ── Canvas 3D ──
-let camRot={x:0.4,y:0.3},camZoom=1,camPan={x:0,y:0};
-let camTarget={x:0,y:0,z:0};
-let isDragging=false,isPanning=false,lastMouse={x:0,y:0},normalizedSystems=[];
-const canvas=document.getElementById('canvas');const ctx=canvas.getContext('2d');
-
-function normalize(){if(!systems.length){normalizedSystems=[];return;}const xs=systems.map(s=>s.x),ys=systems.map(s=>s.y),zs=systems.map(s=>s.z);const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),minZ=Math.min(...zs),maxZ=Math.max(...zs);const range=Math.max(maxX-minX,maxY-minY,maxZ-minZ,1);normalizedSystems=systems.map(s=>({name:s.name,nx:(s.x-(minX+maxX)/2)/range,ny:(s.y-(minY+maxY)/2)/range,nz:(s.z-(minZ+maxZ)/2)/range}));}
-
-function projectWith(nx,ny,nz,rotX,rotY){
-  const cosY=Math.cos(rotY),sinY=Math.sin(rotY);
-  const rx=nx*cosY-nz*sinY,rz=nx*sinY+nz*cosY;
-  const cosX=Math.cos(rotX),sinX=Math.sin(rotX);
-  const ry2=ny*cosX-rz*sinX;
-  const depth=rz*cosX+ny*sinX;
-  const scale=camZoom*Math.min(canvas.width,canvas.height)*0.38;
-  return{sx:canvas.width/2+camPan.x+rx*scale, sy:canvas.height/2+camPan.y-ry2*scale, depth};
+  };
+  _solverWorker.onerror=function(e){
+    _stopTicker();
+    if(_solverWorker){_solverWorker.terminate();_solverWorker=null;}
+    URL.revokeObjectURL(workerUrl);
+    setStatus('Worker error: '+e.message,'err');
+  };
+  _solverWorker.postMessage({systems,chains:cc,startName,endName,timeLimit:TIME_LIMIT});
 }
 
-function project(nx,ny,nz){return projectWith(nx,ny,nz,camRot.x,camRot.y);}
-
-function backProjectPan(){
-  const scale=camZoom*Math.min(canvas.width,canvas.height)*0.38;
-  if(scale===0)return;
-  const rx_rot= camPan.x/scale;
-  const ry_rot=-camPan.y/scale;
-  const cosY=Math.cos(camRot.y),sinY=Math.sin(camRot.y);
-  const cosX=Math.cos(camRot.x);
-  const nx=rx_rot*cosY;
-  const ny=cosX!==0?ry_rot/cosX:0;
-  const nz=-rx_rot*sinY;
-  camTarget={x:nx,y:ny,z:nz};
-}
-
-function drawCanvas(){
-  normalize();
-  canvas.width=canvas.offsetWidth;
-  canvas.height=canvas.offsetHeight;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  if(!systems.length){
-    ctx.fillStyle='#30363d';ctx.font='14px Segoe UI';ctx.textAlign='center';
-    ctx.fillText('Import or add systems to begin',canvas.width/2,canvas.height/2);
-    return;
-  }
+function renderRoute(elapsed,nodeCount,issues,optimality){
+  const list=document.getElementById('routeList');
   const startName=document.getElementById('startSel').value;
   const endName=document.getElementById('endSel').value||startName;
-  ctx.strokeStyle='rgba(48,54,61,0.4)';ctx.lineWidth=0.5;
-  for(let v=-0.5;v<=0.5;v+=0.25){
-    const p1=project(v,-0.5,0),p2=project(v,0.5,0),p3=project(-0.5,v,0),p4=project(0.5,v,0);
-    ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(p3.sx,p3.sy);ctx.lineTo(p4.sx,p4.sy);ctx.stroke();
-  }
-  if(route.length>1){
-    for(let i=0;i<route.length-1;i++){
-      const a=normalizedSystems.find(s=>s.name===route[i]),b=normalizedSystems.find(s=>s.name===route[i+1]);
-      if(!a||!b)continue;
-      const pa=project(a.nx,a.ny,a.nz),pb=project(b.nx,b.ny,b.nz);
-      ctx.strokeStyle='rgba(88,166,255,0.6)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
-      ctx.beginPath();ctx.moveTo(pa.sx,pa.sy);ctx.lineTo(pb.sx,pb.sy);ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle='rgba(88,166,255,0.7)';ctx.font='9px Segoe UI';ctx.textAlign='center';
-      ctx.fillText(i+1,(pa.sx+pb.sx)/2,(pa.sy+pb.sy)/2-3);
+  list.innerHTML='';
+  let totalDist=0;
+  route.forEach((name,i)=>{
+    if(i>0){
+      const a=systems.find(s=>s.name===route[i-1]),b=systems.find(s=>s.name===name);
+      const d=(a&&b)?dist(a,b):0;
+      totalDist+=d;
+      const arrow=document.createElement('div');arrow.className='route-step';
+      arrow.innerHTML=`<span class="route-arrow">\u2192</span><span class="route-dist">${d.toFixed(1)}</span>`;
+      list.appendChild(arrow);
     }
-  }
-  const projected=normalizedSystems.map(s=>{const p=project(s.nx,s.ny,s.nz);return{...s,...p};}).sort((a,b)=>a.depth-b.depth);
-  projected.forEach(s=>{
-    const inRoute=route.includes(s.name),isStart=s.name===startName,isEnd=s.name===endName&&endName;
-    const color=isStart?'#3fb950':isEnd?'#f85149':inRoute?'#58a6ff':'#444c56';
-    const r=isStart||isEnd?6:inRoute?5:3.5;
-    ctx.beginPath();ctx.arc(s.sx,s.sy,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
-    if(inRoute||isStart||isEnd){
-      ctx.strokeStyle=color;ctx.lineWidth=1;ctx.globalAlpha=0.3;
-      ctx.beginPath();ctx.arc(s.sx,s.sy,r+3,0,Math.PI*2);ctx.stroke();
-      ctx.globalAlpha=1;
-    }
-    ctx.fillStyle=inRoute?'#c9d1d9':'#8b949e';
-    ctx.font=(isStart||isEnd)?'bold 11px Segoe UI':'10px Segoe UI';
-    ctx.textAlign='left';
-    ctx.fillText(s.name,s.sx+r+3,s.sy+4);
+    const node=document.createElement('div');node.className='route-step';
+    const isStart=name===startName&&i===0,isEnd=name===endName&&i===route.length-1;
+    const span=document.createElement('span');
+    span.className='route-node'+(isStart?' start-node':isEnd?' end-node':'');
+    span.textContent=`${i+1}. ${name}`;
+    node.appendChild(span);list.appendChild(node);
   });
+  document.getElementById('route-summary').textContent=route.length>0?`${route.length} stops \u00b7 ${totalDist.toFixed(1)} ly`:'';
+  const checkOk=!issues||issues.length===0,isOptimal=optimality==='optimal';
+  if(route.length>0){
+    document.getElementById('statsContent').innerHTML=
+      `<div><span class="stat-label">Systems</span><span class="stat-val">${systems.length}</span></div>`+
+      `<div><span class="stat-label">Route stops</span><span class="stat-val">${route.length}</span></div>`+
+      `<div><span class="stat-label">Total dist.</span><span class="stat-val">${totalDist.toFixed(1)} ly</span></div>`+
+      `<div><span class="stat-label">Jumps</span><span class="stat-val">${route.length-1}</span></div>`+
+      `<div><span class="stat-label">B&amp;B nodes</span><span class="stat-val">${nodeCount.toLocaleString()}</span></div>`+
+      `<div><span class="stat-label">Time</span><span class="stat-val">${elapsed}ms</span></div>`+
+      `<div><span class="stat-label">Optimality</span><span class="stat-val ${isOptimal?'ok':''}">${isOptimal?'\u2605 Optimal':'\u23f1 Best/time'}</span></div>`+
+      `<div><span class="stat-label">Self-check</span><span class="stat-val ${checkOk?'ok':'err'}">${checkOk?'\u2714 PASS':'\u2718 FAIL'}</span></div>`+
+      (issues&&issues.length>0?issues.map(x=>`<div style="color:var(--danger);font-size:10px;clear:both">${x}</div>`).join(''):'');
+    document.getElementById('statsBox').classList.add('has-results');
+  }
 }
 
-function applyRotation(dRotX, dRotY){
-  const before=projectWith(camTarget.x,camTarget.y,camTarget.z,camRot.x,camRot.y);
-  camRot.x+=dRotX;
-  camRot.y+=dRotY;
-  const after=projectWith(camTarget.x,camTarget.y,camTarget.z,camRot.x,camRot.y);
-  camPan.x+=before.sx-after.sx;
-  camPan.y+=before.sy-after.sy;
-}
-
-canvas.addEventListener('mousedown',e=>{
-  if(e.button===2){isPanning=true;canvas.classList.add('panning');}
-  else{isDragging=true;}
-  lastMouse={x:e.clientX,y:e.clientY};
-  e.preventDefault();
-});
-canvas.addEventListener('mousemove',e=>{
-  const dx=e.clientX-lastMouse.x, dy=e.clientY-lastMouse.y;
-  if(isDragging){applyRotation(dy*0.006,dx*0.006);drawCanvas();}
-  else if(isPanning){camPan.x+=dx;camPan.y+=dy;drawCanvas();}
-  lastMouse={x:e.clientX,y:e.clientY};
-});
-canvas.addEventListener('mouseup',e=>{
-  if(e.button===2){isPanning=false;canvas.classList.remove('panning');backProjectPan();}
-  else isDragging=false;
-});
-canvas.addEventListener('mouseleave',()=>{
-  if(isPanning)backProjectPan();
-  isDragging=false;isPanning=false;canvas.classList.remove('panning');
-});
+// ── Canvas 3D ──
+let camRot={x:0.4,y:0.3},camZoom=1,camPan={x:0,y:0},camTarget={x:0,y:0,z:0};
+let isDragging=false,isPanning=false,lastMouse={x:0,y:0},normalizedSystems=[];
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');
+function normalize(){if(!systems.length){normalizedSystems=[];return;}const xs=systems.map(s=>s.x),ys=systems.map(s=>s.y),zs=systems.map(s=>s.z);const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),minZ=Math.min(...zs),maxZ=Math.max(...zs);const range=Math.max(maxX-minX,maxY-minY,maxZ-minZ,1);normalizedSystems=systems.map(s=>({name:s.name,nx:(s.x-(minX+maxX)/2)/range,ny:(s.y-(minY+maxY)/2)/range,nz:(s.z-(minZ+maxZ)/2)/range}));}
+function projectWith(nx,ny,nz,rotX,rotY){const cosY=Math.cos(rotY),sinY=Math.sin(rotY);const rx=nx*cosY-nz*sinY,rz=nx*sinY+nz*cosY;const cosX=Math.cos(rotX),sinX=Math.sin(rotX);const ry2=ny*cosX-rz*sinX;const depth=rz*cosX+ny*sinX;const scale=camZoom*Math.min(canvas.width,canvas.height)*0.38;return{sx:canvas.width/2+camPan.x+rx*scale,sy:canvas.height/2+camPan.y-ry2*scale,depth};}
+function project(nx,ny,nz){return projectWith(nx,ny,nz,camRot.x,camRot.y);}
+function backProjectPan(){const scale=camZoom*Math.min(canvas.width,canvas.height)*0.38;if(!scale)return;camTarget={x:(camPan.x/scale)*Math.cos(camRot.y),y:(-camPan.y/scale)/(Math.cos(camRot.x)||1),z:-(camPan.x/scale)*Math.sin(camRot.y)};}
+function drawCanvas(){normalize();canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;ctx.clearRect(0,0,canvas.width,canvas.height);if(!systems.length){ctx.fillStyle='#30363d';ctx.font='14px Segoe UI';ctx.textAlign='center';ctx.fillText('Import or add systems to begin',canvas.width/2,canvas.height/2);return;}const startName=document.getElementById('startSel').value,endName=document.getElementById('endSel').value||startName;ctx.strokeStyle='rgba(48,54,61,0.4)';ctx.lineWidth=0.5;for(let v=-0.5;v<=0.5;v+=0.25){const p1=project(v,-0.5,0),p2=project(v,0.5,0),p3=project(-0.5,v,0),p4=project(0.5,v,0);ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();ctx.beginPath();ctx.moveTo(p3.sx,p3.sy);ctx.lineTo(p4.sx,p4.sy);ctx.stroke();}if(route.length>1){for(let i=0;i<route.length-1;i++){const a=normalizedSystems.find(s=>s.name===route[i]),b=normalizedSystems.find(s=>s.name===route[i+1]);if(!a||!b)continue;const pa=project(a.nx,a.ny,a.nz),pb=project(b.nx,b.ny,b.nz);ctx.strokeStyle='rgba(88,166,255,0.6)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(pa.sx,pa.sy);ctx.lineTo(pb.sx,pb.sy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(88,166,255,0.7)';ctx.font='9px Segoe UI';ctx.textAlign='center';ctx.fillText(i+1,(pa.sx+pb.sx)/2,(pa.sy+pb.sy)/2-3);}}const projected=normalizedSystems.map(s=>{const p=project(s.nx,s.ny,s.nz);return{...s,...p};}).sort((a,b)=>a.depth-b.depth);projected.forEach(s=>{const inRoute=route.includes(s.name),isStart=s.name===startName,isEnd=s.name===endName&&endName;const color=isStart?'#3fb950':isEnd?'#f85149':inRoute?'#58a6ff':'#444c56';const r=isStart||isEnd?6:inRoute?5:3.5;ctx.beginPath();ctx.arc(s.sx,s.sy,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();if(inRoute||isStart||isEnd){ctx.strokeStyle=color;ctx.lineWidth=1;ctx.globalAlpha=0.3;ctx.beginPath();ctx.arc(s.sx,s.sy,r+3,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;}ctx.fillStyle=inRoute?'#c9d1d9':'#8b949e';ctx.font=(isStart||isEnd)?'bold 11px Segoe UI':'10px Segoe UI';ctx.textAlign='left';ctx.fillText(s.name,s.sx+r+3,s.sy+4);});}
+function applyRotation(dRotX,dRotY){const before=projectWith(camTarget.x,camTarget.y,camTarget.z,camRot.x,camRot.y);camRot.x+=dRotX;camRot.y+=dRotY;const after=projectWith(camTarget.x,camTarget.y,camTarget.z,camRot.x,camRot.y);camPan.x+=before.sx-after.sx;camPan.y+=before.sy-after.sy;}
+canvas.addEventListener('mousedown',e=>{if(e.button===2){isPanning=true;canvas.classList.add('panning');}else isDragging=true;lastMouse={x:e.clientX,y:e.clientY};e.preventDefault();});
+canvas.addEventListener('mousemove',e=>{const dx=e.clientX-lastMouse.x,dy=e.clientY-lastMouse.y;if(isDragging){applyRotation(dy*0.006,dx*0.006);drawCanvas();}else if(isPanning){camPan.x+=dx;camPan.y+=dy;drawCanvas();}lastMouse={x:e.clientX,y:e.clientY};});
+canvas.addEventListener('mouseup',e=>{if(e.button===2){isPanning=false;canvas.classList.remove('panning');backProjectPan();}else isDragging=false;});
+canvas.addEventListener('mouseleave',()=>{if(isPanning)backProjectPan();isDragging=false;isPanning=false;canvas.classList.remove('panning');});
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
-
-canvas.addEventListener('wheel',e=>{
-  e.preventDefault();
-  const rect=canvas.getBoundingClientRect();
-  const cx=(e.clientX-rect.left)-canvas.width/2;
-  const cy=(e.clientY-rect.top)-canvas.height/2;
-  const factor=e.deltaY<0?1.1:0.9;
-  const oldZoom=camZoom;
-  camZoom=Math.max(0.2,Math.min(50,camZoom*factor));
-  const af=camZoom/oldZoom;
-  camPan.x=cx-(cx-camPan.x)*af;
-  camPan.y=cy-(cy-camPan.y)*af;
-  backProjectPan();
-  drawCanvas();
-},{passive:false});
-
+canvas.addEventListener('wheel',e=>{e.preventDefault();const rect=canvas.getBoundingClientRect();const cx=(e.clientX-rect.left)-canvas.width/2,cy=(e.clientY-rect.top)-canvas.height/2;const factor=e.deltaY<0?1.1:0.9;const oldZoom=camZoom;camZoom=Math.max(0.2,Math.min(50,camZoom*factor));const af=camZoom/oldZoom;camPan.x=cx-(cx-camPan.x)*af;camPan.y=cy-(cy-camPan.y)*af;backProjectPan();drawCanvas();},{passive:false});
 let lastTouch=null;
 canvas.addEventListener('touchstart',e=>{lastTouch=e.touches[0];});
 canvas.addEventListener('touchmove',e=>{e.preventDefault();if(!lastTouch)return;const t=e.touches[0];applyRotation((t.clientY-lastTouch.clientY)*0.006,(t.clientX-lastTouch.clientX)*0.006);lastTouch=t;drawCanvas();},{passive:false});
 window.addEventListener('resize',drawCanvas);
 
 function exportCSV(){if(!route.length){setStatus('Calculate a route first.','err');return;}const lines=['Name,X,Y,Z'];route.forEach(name=>{const s=systems.find(s=>s.name===name);if(s)lines.push(`${s.name},${s.x},${s.y},${s.z}`);});const blob=new Blob([lines.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='route.csv';a.click();setStatus('Route exported.','ok');}
-function clearAll(){if(!confirm('Clear all systems, chains, and route?'))return;systems=[];chains=[];route=[];renderSystems();renderChains();updateSelects();document.getElementById('routeList').innerHTML='';document.getElementById('route-summary').textContent='';clearStats();drawCanvas();localStorage.removeItem('route_opt_state');setStatus('Cleared.','info');}
+function clearAll(){if(!confirm('Clear all systems, chains, and route?'))return;systems=[];chains=[];route=[];if(_solverWorker){_solverWorker.terminate();_solverWorker=null;_stopTicker();}renderSystems();renderChains();updateSelects();document.getElementById('routeList').innerHTML='';document.getElementById('route-summary').textContent='';clearStats();drawCanvas();localStorage.removeItem('route_opt_state');setStatus('Cleared.','info');}
 function setStatus(msg,type){const el=document.getElementById('status');el.textContent=msg;el.className='status-'+(type||'info');}
 
 loadLayout();
