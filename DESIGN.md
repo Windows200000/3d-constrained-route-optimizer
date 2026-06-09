@@ -58,3 +58,6 @@ The specific algorithm used is an implementation detail — what matters is the 
 - **CSV import/export** in `Name,X,Y,Z` format; paste directly or load a file
 - **Manual entry**: add systems one by one with coordinates
 - Header row in CSV is auto-detected and optional
+- **Legend removed** from right panel — chains panel now fills the full height (`flex:1`) for better usability with many chains
+- **Export Chains CSV**: the right panel header has a `↓ CSV` button that exports all chains to `chains.csv` with columns `Chain,Position,Name,X,Y,Z`
+- **Export Route CSV**: header button (renamed to "Export Route CSV") exports the solved route as `route.csv` in `Name,X,Y,Z` format

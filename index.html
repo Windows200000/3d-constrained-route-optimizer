@@ -52,7 +52,7 @@
   .sys-item .badge { font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
   .badge-start { background: var(--start); color: #000; }
   .badge-end { background: var(--end); color: #fff; }
-  .chains-panel { flex: 0 0 220px; overflow-y: auto; padding: 8px; }
+  .chains-panel { flex: 1; overflow-y: auto; padding: 8px; }
   .chain-block { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
   .chain-header { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: rgba(163,113,247,0.1); border-bottom: 1px solid var(--border); }
   .chain-header span { flex: 1; font-size: 11px; color: var(--chain); font-weight: 600; }
@@ -84,10 +84,9 @@
   .status-info { color: var(--accent2); }
   .status-warn { color: var(--accent); }
   .right { width: 220px; flex-shrink: 0; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
-  .right h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); padding: 10px 12px 6px; border-bottom: 1px solid var(--border); }
-  .legend { padding: 8px 12px; font-size: 11px; line-height: 1.8; }
-  .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
-  .stats-box { padding: 8px 12px; border-top: 1px solid var(--border); font-size: 12px; line-height: 2; }
+  .right-header { display: flex; align-items: center; gap: 6px; padding: 8px 12px 6px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .right-header h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); flex: 1; margin: 0; }
+  .stats-box { padding: 8px 12px; border-top: 1px solid var(--border); font-size: 12px; line-height: 2; flex-shrink: 0; }
   .stats-box .stat-label { color: var(--text-muted); font-size: 11px; }
   .stats-box .stat-val { float: right; color: var(--accent); font-weight: 600; }
   .stats-box .stat-val.ok { color: var(--start); }
@@ -102,7 +101,7 @@
   <h1>&#x2B21; 3D ROUTE OPTIMIZER</h1>
   <span>TSP with chain ordering constraints &middot; 3D visualization &middot; B&amp;B + 2-opt/3-opt solver</span>
   <div style="flex:1"></div>
-  <button class="btn btn-sm" onclick="exportCSV()">&#x2B07; Export CSV</button>
+  <button class="btn btn-sm" onclick="exportCSV()">&#x2B07; Export Route CSV</button>
   <button class="btn btn-sm" onclick="clearAll()">&#x2715; Clear All</button>
 </header>
 <div class="main">
@@ -153,17 +152,13 @@
     </div>
   </div>
   <div class="right">
-    <h2>Chains</h2>
-    <div class="chains-panel" id="chainsPanel"></div>
-    <div style="padding:6px 8px;border-top:1px solid var(--border)">
-      <button class="add-chain-btn" onclick="addChain()">+ New Chain</button>
+    <div class="right-header">
+      <h2>Chains</h2>
+      <button class="btn btn-sm" onclick="exportChainsCSV()" title="Export chains as CSV">&#x2B07; CSV</button>
     </div>
-    <h2 style="margin-top:auto">Legend</h2>
-    <div class="legend">
-      <div><span class="legend-dot" style="background:#3fb950"></span>Start</div>
-      <div><span class="legend-dot" style="background:#f85149"></span>End</div>
-      <div><span class="legend-dot" style="background:#58a6ff"></span>Route</div>
-      <div><span class="legend-dot" style="background:#8b949e"></span>Not used</div>
+    <div class="chains-panel" id="chainsPanel"></div>
+    <div style="padding:6px 8px;border-top:1px solid var(--border);flex-shrink:0">
+      <button class="add-chain-btn" onclick="addChain()">+ New Chain</button>
     </div>
     <div class="stats-box" id="statsBox"></div>
   </div>
@@ -184,14 +179,15 @@ function removeChain(id){chains=chains.filter(c=>c.id!==id);renderChains();saveS
 function removeChainItem(chainId,idx){const c=chains.find(c=>c.id===chainId);if(c){c.items.splice(idx,1);renderChains();saveState();}}
 function renderChains(){const panel=document.getElementById('chainsPanel');panel.innerHTML='';if(chains.length===0){panel.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:6px;font-style:italic">No chains yet.<br>Click "+ New Chain" below.</div>';return;}chains.forEach((chain,ci)=>{const block=document.createElement('div');block.className='chain-block';const header=document.createElement('div');header.className='chain-header';header.innerHTML=`<span>Chain ${ci+1}</span><button class="btn btn-sm btn-danger" onclick="removeChain(${chain.id})">&#x2715;</button>`;const zone=document.createElement('div');zone.className='chain-drop-zone';zone.dataset.chainId=chain.id;if(chain.items.length===0){zone.innerHTML='<span class="chain-empty">Drop systems here</span>';}else{chain.items.forEach((name,idx)=>{if(idx>0){const arr=document.createElement('span');arr.textContent='\u2192';arr.style.cssText='color:var(--text-muted);font-size:10px;align-self:center';zone.appendChild(arr);}const item=document.createElement('div');item.className='chain-item';item.draggable=true;item.dataset.chainId=chain.id;item.dataset.idx=idx;item.innerHTML=`${name}<span class="remove-item" onclick="removeChainItem(${chain.id},${idx})">&#x2715;</span>`;item.addEventListener('dragstart',e=>{e.dataTransfer.setData('chain-move',JSON.stringify({chainId:chain.id,idx}));e.dataTransfer.effectAllowed='move';});zone.appendChild(item);});}zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over');});zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-over');const chainId=parseInt(zone.dataset.chainId);const c=chains.find(c=>c.id===chainId);if(!c)return;const moveData=e.dataTransfer.getData('chain-move');if(moveData){const{chainId:srcId,idx:srcIdx}=JSON.parse(moveData);const src=chains.find(c=>c.id===srcId);if(!src)return;const name=src.items[srcIdx];src.items.splice(srcIdx,1);c.items.push(name);renderChains();saveState();return;}const name=e.dataTransfer.getData('text/plain');if(!name||!systems.find(s=>s.name===name))return;c.items.push(name);renderChains();saveState();});block.appendChild(header);block.appendChild(zone);panel.appendChild(block);});}
 
-// ─── Core geometry ────────────────────────────────────────────────────────────
+// --- Export chains as CSV ---
+function exportChainsCSV(){const cc=chains.filter(c=>c.items.length>0);if(!cc.length){setStatus('No chains to export.','err');return;}const lines=['Chain,Position,Name,X,Y,Z'];cc.forEach((chain,ci)=>{chain.items.forEach((name,pos)=>{const s=systems.find(s=>s.name===name);const x=s?s.x:'',y=s?s.y:'',z=s?s.z:'';lines.push(`${ci+1},${pos+1},${name},${x},${y},${z}`);});});const blob=new Blob([lines.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chains.csv';a.click();setStatus(`Exported ${cc.length} chain(s) as CSV.`,'ok');}
+
+// --- Core geometry ---
 function dist(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2);}
 function routeDist(names){let d=0;for(let i=0;i<names.length-1;i++){const a=systems.find(s=>s.name===names[i]);const b=systems.find(s=>s.name===names[i+1]);if(a&&b)d+=dist(a,b);}return d;}
 
-// ─── Chain constraint helpers ─────────────────────────────────────────────────
+// --- Chain constraint helpers ---
 function initProgress(cc){return cc.map(()=>0);}
-
-// Advance all chain progress counters past consecutive matches of `name`.
 function advanceProgress(name,progress,cc){
   const np=[...progress];
   for(let ci=0;ci<cc.length;ci++){
@@ -199,10 +195,6 @@ function advanceProgress(name,progress,cc){
   }
   return np;
 }
-
-// canVisit logic:
-//   Not yet visited → always allow immediately.
-//   Already visited → only allow if it is the immediate next item in at least one chain.
 function canVisit(name,visited,progress,cc){
   if(!visited.has(name))return true;
   for(let ci=0;ci<cc.length;ci++){
@@ -211,8 +203,6 @@ function canVisit(name,visited,progress,cc){
   }
   return false;
 }
-
-// Collect all visitable system names given current state.
 function getCandidates(visited,progress,cc,endName){
   const out=[];
   for(const sys of systems){
@@ -221,14 +211,10 @@ function getCandidates(visited,progress,cc,endName){
   }
   return out;
 }
-
-// All chain progress counters have reached their end → constraints satisfied.
 function chainsComplete(progress,cc){
   for(let ci=0;ci<cc.length;ci++)if(progress[ci]<cc[ci].items.length)return false;
   return true;
 }
-
-// Validate a complete route against chain ordering (used by 2-opt/or-opt).
 function isValidRoute(r,cc){
   for(const chain of cc){
     if(!chain.items.length)continue;
@@ -242,7 +228,7 @@ function isValidRoute(r,cc){
   return true;
 }
 
-// ─── Prim's MST lower bound ───────────────────────────────────────────────────
+// --- Prim's MST lower bound ---
 function mstCost(nodes){
   if(nodes.length<2)return 0;
   const n=nodes.length;
@@ -257,7 +243,6 @@ function mstCost(nodes){
   }
   return total;
 }
-
 function lowerBound(partialDist,currentSys,unvisitedSystems,endSys){
   if(unvisitedSystems.length===0)return partialDist+(endSys?dist(currentSys,endSys):0);
   let minOut=Infinity;
@@ -268,7 +253,7 @@ function lowerBound(partialDist,currentSys,unvisitedSystems,endSys){
   return partialDist+minOut+mst+minIn;
 }
 
-// ─── Greedy nearest-neighbour seed ───────────────────────────────────────────
+// --- Greedy nearest-neighbour seed ---
 function buildGreedyRoute(startName,endName,cc){
   const visited=new Set([startName]);
   let progress=advanceProgress(startName,initProgress(cc),cc);
@@ -293,7 +278,7 @@ function buildGreedyRoute(startName,endName,cc){
   return r;
 }
 
-// ─── 2-opt local search (constraint-aware) ───────────────────────────────────
+// --- 2-opt ---
 function twoOpt(r,cc,deadline){
   const n=r.length;
   const fixHead=1,fixTail=n-2;
@@ -312,7 +297,7 @@ function twoOpt(r,cc,deadline){
   return r;
 }
 
-// ─── Or-opt: relocate single nodes ───────────────────────────────────────────
+// --- Or-opt ---
 function orOpt(r,cc,deadline){
   const n=r.length;
   let improved=true;
@@ -332,7 +317,7 @@ function orOpt(r,cc,deadline){
   return r;
 }
 
-// ─── Double-bridge perturbation ───────────────────────────────────────────────
+// --- Double-bridge ---
 function doubleBridge(r,cc){
   const n=r.length;
   if(n<8)return r;
@@ -345,7 +330,7 @@ function doubleBridge(r,cc){
   return isValidRoute(candidate,cc)?candidate:r;
 }
 
-// ─── Iterated Local Search ────────────────────────────────────────────────────
+// --- ILS ---
 function iteratedLocalSearch(startName,endName,cc,timeLimit){
   const deadline=Date.now()+timeLimit;
   let best=buildGreedyRoute(startName,endName,cc);
@@ -363,29 +348,23 @@ function iteratedLocalSearch(startName,endName,cc,timeLimit){
   return{route:best,dist:bestD};
 }
 
-// ─── Branch & Bound ───────────────────────────────────────────────────────────
+// --- Branch & Bound ---
 function branchAndBound(startName,endName,cc,timeLimit){
   const ilsTime=Math.floor(timeLimit*0.40);
   const deadlineBB=Date.now()+timeLimit;
-
   const ilsResult=iteratedLocalSearch(startName,endName,cc,ilsTime);
   let bestRoute=ilsResult?ilsResult.route:buildGreedyRoute(startName,endName,cc);
   let bestDist=bestRoute?routeDist(bestRoute):Infinity;
-
   const endSys=endName?systems.find(s=>s.name===endName):null;
   let timedOut=false,nodesChecked=0;
-
   const initVis=new Set([startName]);
   const initProg=advanceProgress(startName,initProgress(cc),cc);
   const stack=[{route:[startName],visited:initVis,progress:initProg,partialDist:0}];
-
   while(stack.length>0){
     if(Date.now()>=deadlineBB){timedOut=true;break;}
     const{route,visited,progress,partialDist}=stack.pop();
     nodesChecked++;
-
     const candidates=getCandidates(visited,progress,cc,endName);
-
     if(candidates.length===0){
       if(!chainsComplete(progress,cc))continue;
       const curSys=systems.find(s=>s.name===route[route.length-1]);
@@ -396,13 +375,11 @@ function branchAndBound(startName,endName,cc,timeLimit){
       }
       continue;
     }
-
     const curSys=systems.find(s=>s.name===route[route.length-1]);
     const expanded=candidates.map(name=>{
       const s=systems.find(s=>s.name===name);
       return{name,sys:s,d:dist(curSys,s)};
     }).sort((a,b)=>a.d-b.d);
-
     for(let i=expanded.length-1;i>=0;i--){
       const{name,sys,d}=expanded[i];
       const newPartial=partialDist+d;
@@ -415,11 +392,10 @@ function branchAndBound(startName,endName,cc,timeLimit){
       stack.push({route:[...route,name],visited:newVisited,progress:newProgress,partialDist:newPartial});
     }
   }
-
   return{route:bestRoute,dist:bestDist,timedOut,nodesChecked};
 }
 
-// ─── Self-check ───────────────────────────────────────────────────────────────
+// --- Self-check ---
 function selfCheck(r,cc,startName,endName){
   const issues=[];
   if(!isValidRoute(r,cc))issues.push('Chain order constraints violated!');
@@ -430,7 +406,7 @@ function selfCheck(r,cc,startName,endName){
   return issues;
 }
 
-// ─── Main calculate entry point ───────────────────────────────────────────────
+// --- Calculate ---
 function calculateRoute(){
   const startName=document.getElementById('startSel').value;
   const endName=document.getElementById('endSel').value||null;
@@ -458,7 +434,7 @@ function calculateRoute(){
   },20);
 }
 
-// ─── Render route + stats ─────────────────────────────────────────────────────
+// --- Render route + stats ---
 function renderRoute(elapsed,nodeCount,issues,optimality){
   const list=document.getElementById('routeList');
   const startName=document.getElementById('startSel').value;
@@ -476,7 +452,8 @@ function renderRoute(elapsed,nodeCount,issues,optimality){
     const node=document.createElement('div');node.className='route-step';
     const isStart=name===startName&&i===0;
     const isEnd=name===endName&&i===route.length-1;
-    node.innerHTML=`<span class="route-node ${isStart?'start-node':''} ${isEnd?'end-node':''}">${i+1}. ${name}</span>`;
+    node.innerHTML=`<span class="route-node ${isStart?'start-node':''} ${isEnd?'end-node':''}">{{i+1}}. ${name}</span>`;
+    node.querySelector('span').textContent=`${i+1}. ${name}`;
     list.appendChild(node);
   });
   document.getElementById('route-summary').textContent=route.length>0?`${route.length} stops \u00b7 ${totalDist.toFixed(1)} ly`:'';
@@ -489,13 +466,13 @@ function renderRoute(elapsed,nodeCount,issues,optimality){
     `<div><span class="stat-label">Jumps</span><span class="stat-val">${route.length-1}</span></div>`+
     `<div><span class="stat-label">B&amp;B nodes</span><span class="stat-val">${nodeCount.toLocaleString()}</span></div>`+
     `<div><span class="stat-label">Time</span><span class="stat-val">${elapsed}ms</span></div>`+
-    `<div><span class="stat-label">Optimality</span><span class="stat-val ${isOptimal?'ok':''}"> ${isOptimal?'\u2605 Optimal':'\u23f1 Best/time'}</span></div>`+
+    `<div><span class="stat-label">Optimality</span><span class="stat-val ${isOptimal?'ok':''}">${isOptimal?'\u2605 Optimal':'\u23f1 Best/time'}</span></div>`+
     `<div><span class="stat-label">Self-check</span><span class="stat-val ${checkOk?'ok':'err'}">${checkOk?'\u2714 PASS':'\u2718 FAIL'}</span></div>`+
     (issues&&issues.length>0?issues.map(i=>`<div style="color:var(--danger);font-size:10px;clear:both">${i}</div>`).join(''):'')
   :'';
 }
 
-// ─── Canvas 3D ────────────────────────────────────────────────────────────────
+// --- Canvas 3D ---
 let camRot={x:0.4,y:0.3},camZoom=1,isDragging=false,lastMouse={x:0,y:0},normalizedSystems=[];
 const canvas=document.getElementById('canvas');const ctx=canvas.getContext('2d');
 function normalize(){if(!systems.length){normalizedSystems=[];return;}const xs=systems.map(s=>s.x),ys=systems.map(s=>s.y),zs=systems.map(s=>s.z);const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),minZ=Math.min(...zs),maxZ=Math.max(...zs);const range=Math.max(maxX-minX,maxY-minY,maxZ-minZ,1);normalizedSystems=systems.map(s=>({name:s.name,nx:(s.x-(minX+maxX)/2)/range,ny:(s.y-(minY+maxY)/2)/range,nz:(s.z-(minZ+maxZ)/2)/range}));}
