@@ -18,6 +18,8 @@
     --end: #f85149;
     --chain: #a371f7;
     --danger: #f85149;
+    --left-w: 220px;
+    --right-w: 460px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -25,12 +27,14 @@
   header h1 { font-size: 15px; font-weight: 600; color: var(--accent); letter-spacing: 1px; }
   header span { color: var(--text-muted); font-size: 11px; }
   .main { display: flex; flex: 1; overflow: hidden; }
-  .left { width: 300px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Left column ── */
+  .left { width: var(--left-w); min-width: 140px; max-width: 400px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
   .panel-section { border-bottom: 1px solid var(--border); padding: 10px 12px; }
   .panel-section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px; }
   .row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
   .row label { color: var(--text-muted); width: 38px; flex-shrink: 0; font-size: 11px; }
-  select, input[type=text] { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 12px; flex: 1; }
+  select, input[type=text] { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 12px; flex: 1; min-width: 0; }
   select:focus, input[type=text]:focus { outline: none; border-color: var(--accent2); }
   .btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap; }
   .btn:hover { border-color: var(--accent2); color: var(--accent2); }
@@ -41,31 +45,30 @@
   .btn-sm { padding: 3px 7px; font-size: 11px; }
   textarea { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 8px; border-radius: 4px; font-size: 11px; width: 100%; resize: vertical; font-family: monospace; }
   textarea:focus { outline: none; border-color: var(--accent2); }
+
+  /* Import buttons stacked */
+  .import-btns { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+  .import-btns .btn { width: 100%; text-align: center; }
+
+  /* ── Systems list (in left col) ── */
   .systems-list { flex: 1; overflow-y: auto; padding: 8px; }
   .sys-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px; margin-bottom: 4px; cursor: grab; display: flex; align-items: center; gap: 6px; font-size: 12px; user-select: none; }
   .sys-item:active { cursor: grabbing; }
   .sys-item .drag-hint { color: var(--text-muted); font-size: 10px; }
-  .sys-item .sys-name { flex: 1; }
+  .sys-item .sys-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sys-item.is-start { border-left: 3px solid var(--start); }
   .sys-item.is-end { border-left: 3px solid var(--end); }
   .sys-item.dragging { opacity: 0.4; }
   .sys-item .badge { font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
   .badge-start { background: var(--start); color: #000; }
   .badge-end { background: var(--end); color: #fff; }
-  .chains-panel { flex: 1; overflow-y: auto; padding: 8px; }
-  .chain-block { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
-  .chain-header { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: rgba(163,113,247,0.1); border-bottom: 1px solid var(--border); }
-  .chain-header span { flex: 1; font-size: 11px; color: var(--chain); font-weight: 600; }
-  .chain-drop-zone { min-height: 32px; padding: 4px; display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-start; }
-  .chain-drop-zone.drag-over { background: rgba(88,166,255,0.08); border-radius: 4px; }
-  .chain-item { background: var(--bg); border: 1px solid var(--chain); color: var(--chain); border-radius: 3px; padding: 2px 6px; font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: grab; user-select: none; }
-  .chain-item:active { cursor: grabbing; }
-  .chain-item .remove-item { cursor: pointer; color: var(--text-muted); font-size: 10px; line-height: 1; }
-  .chain-item .remove-item:hover { color: var(--danger); }
-  .chain-empty { color: var(--text-muted); font-size: 11px; padding: 4px; font-style: italic; }
-  .add-chain-btn { width: 100%; background: none; border: 1px dashed var(--border); color: var(--text-muted); padding: 6px; border-radius: 4px; cursor: pointer; font-size: 11px; }
-  .add-chain-btn:hover { border-color: var(--chain); color: var(--chain); }
-  .center { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Resize handle ── */
+  .resize-handle { width: 5px; flex-shrink: 0; background: transparent; cursor: col-resize; position: relative; z-index: 10; }
+  .resize-handle:hover, .resize-handle.active { background: var(--accent2); opacity: 0.5; }
+
+  /* ── Center column ── */
+  .center { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 200px; }
   #canvas { flex: 1; display: block; cursor: grab; background: #080c10; }
   #canvas:active { cursor: grabbing; }
   .bottom { height: 180px; flex-shrink: 0; background: var(--surface); border-top: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
@@ -83,14 +86,64 @@
   .status-err { color: var(--danger); }
   .status-info { color: var(--accent2); }
   .status-warn { color: var(--accent); }
-  .right { width: 220px; flex-shrink: 0; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Right column: Systems + Chains side by side ── */
+  .right { width: var(--right-w); min-width: 240px; max-width: 700px; flex-shrink: 0; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: row; overflow: hidden; }
+
+  /* Systems sub-panel */
+  .right-systems { width: 180px; min-width: 120px; max-width: 300px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .right-systems-header { display: flex; align-items: center; gap: 6px; padding: 8px 12px 6px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .right-systems-header h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); flex: 1; margin: 0; }
+  .right-systems-list { flex: 1; overflow-y: auto; padding: 6px; }
+
+  /* Chains sub-panel */
+  .right-chains { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
   .right-header { display: flex; align-items: center; gap: 6px; padding: 8px 12px 6px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .right-header h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); flex: 1; margin: 0; }
-  .stats-box { padding: 8px 12px; border-top: 1px solid var(--border); font-size: 12px; line-height: 2; flex-shrink: 0; }
-  .stats-box .stat-label { color: var(--text-muted); font-size: 11px; }
-  .stats-box .stat-val { float: right; color: var(--accent); font-weight: 600; }
-  .stats-box .stat-val.ok { color: var(--start); }
-  .stats-box .stat-val.err { color: var(--danger); }
+  .chains-panel { flex: 1; overflow-y: auto; padding: 8px; }
+  .chain-block { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
+  .chain-header { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: rgba(163,113,247,0.1); border-bottom: 1px solid var(--border); }
+  .chain-header span { flex: 1; font-size: 11px; color: var(--chain); font-weight: 600; }
+  .chain-drop-zone { min-height: 32px; padding: 4px; display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-start; }
+  .chain-drop-zone.drag-over { background: rgba(88,166,255,0.08); border-radius: 4px; }
+  .chain-item { background: var(--bg); border: 1px solid var(--chain); color: var(--chain); border-radius: 3px; padding: 2px 6px; font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: grab; user-select: none; }
+  .chain-item:active { cursor: grabbing; }
+  .chain-item .remove-item { cursor: pointer; color: var(--text-muted); font-size: 10px; line-height: 1; }
+  .chain-item .remove-item:hover { color: var(--danger); }
+  .chain-empty { color: var(--text-muted); font-size: 11px; padding: 4px; font-style: italic; }
+  .add-chain-btn { width: 100%; background: none; border: 1px dashed var(--border); color: var(--text-muted); padding: 6px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .add-chain-btn:hover { border-color: var(--chain); color: var(--chain); }
+
+  /* ── Stats popup ── */
+  .stats-popup {
+    display: none;
+    position: absolute;
+    bottom: 60px; /* above the calculate button */
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface2);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 10px 14px 8px;
+    min-width: 200px;
+    z-index: 100;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    font-size: 12px;
+    line-height: 2;
+  }
+  .stats-popup.visible { display: block; }
+  .stats-popup-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .stats-popup-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+  .stats-popup-close { cursor: pointer; color: var(--text-muted); font-size: 14px; line-height: 1; padding: 0 2px; }
+  .stats-popup-close:hover { color: var(--danger); }
+  .stat-label { color: var(--text-muted); font-size: 11px; }
+  .stat-val { float: right; color: var(--accent); font-weight: 600; }
+  .stat-val.ok { color: var(--start); }
+  .stat-val.err { color: var(--danger); }
+
+  /* Left col calculate button area — needs relative for popup */
+  .left-footer { padding: 8px 12px; border-top: 1px solid var(--border); flex-shrink: 0; position: relative; }
+
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -104,8 +157,9 @@
   <button class="btn btn-sm" onclick="exportCSV()">&#x2B07; Export Route CSV</button>
   <button class="btn btn-sm" onclick="clearAll()">&#x2715; Clear All</button>
 </header>
-<div class="main">
-  <div class="left">
+<div class="main" id="mainLayout">
+  <!-- LEFT -->
+  <div class="left" id="leftCol">
     <div class="panel-section">
       <h2>Route Endpoints</h2>
       <div class="row"><label>Start</label><select id="startSel" onchange="saveState()"><option value="">&mdash; none &mdash;</option></select></div>
@@ -115,40 +169,46 @@
       <h2>Add System Manually</h2>
       <div class="row"><input type="text" id="manualName" placeholder="Name" style="flex:2"></div>
       <div class="row">
-        <input type="text" id="manualX" placeholder="X" style="width:52px;flex:none">
-        <input type="text" id="manualY" placeholder="Y" style="width:52px;flex:none">
-        <input type="text" id="manualZ" placeholder="Z" style="width:52px;flex:none">
+        <input type="text" id="manualX" placeholder="X" style="width:44px;flex:none">
+        <input type="text" id="manualY" placeholder="Y" style="width:44px;flex:none">
+        <input type="text" id="manualZ" placeholder="Z" style="width:44px;flex:none">
         <button class="btn btn-sm" onclick="addManual()">Add</button>
       </div>
     </div>
     <div class="panel-section">
-      <h2>Import Systems CSV (Name,X,Y,Z)</h2>
+      <h2>Import Systems CSV</h2>
       <textarea id="csvInput" rows="2" placeholder="Name,X,Y,Z&#10;Sol,0,0,0"></textarea>
-      <div class="row" style="margin-top:6px">
-        <button class="btn" style="flex:1" onclick="importCSV()">Import</button>
-        <label class="btn" style="flex:1;text-align:center;cursor:pointer">Load File <input type="file" accept=".csv" onchange="loadFile(event)" style="display:none"></label>
+      <div class="import-btns">
+        <button class="btn" onclick="importCSV()">&#x2B06; Import Pasted</button>
+        <label class="btn" style="cursor:pointer;text-align:center">&#x1F4C2; Load File <input type="file" accept=".csv" onchange="loadFile(event)" style="display:none"></label>
       </div>
     </div>
     <div class="panel-section">
       <h2>Import Chains CSV</h2>
       <textarea id="chainsInput" rows="2" placeholder="Chain,Position,Name,X,Y,Z&#10;1,1,Sol,0,0,0"></textarea>
-      <div class="row" style="margin-top:6px">
-        <button class="btn" style="flex:1" onclick="importChainsCSV()">Import</button>
-        <label class="btn" style="flex:1;text-align:center;cursor:pointer">Load File <input type="file" accept=".csv" onchange="loadChainsFile(event)" style="display:none"></label>
+      <div class="import-btns">
+        <button class="btn" onclick="importChainsCSV()">&#x2B06; Import Pasted</button>
+        <label class="btn" style="cursor:pointer;text-align:center">&#x1F4C2; Load File <input type="file" accept=".csv" onchange="loadChainsFile(event)" style="display:none"></label>
       </div>
     </div>
-    <div class="panel-section" style="flex-shrink:0">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <h2 style="margin:0">Systems (drag to chains)</h2>
-        <span id="sys-count" style="color:var(--text-muted);font-size:11px">0</span>
+    <div class="left-footer">
+      <!-- Stats popup anchored above Calculate button -->
+      <div class="stats-popup" id="statsPopup">
+        <div class="stats-popup-header">
+          <span class="stats-popup-title">Result</span>
+          <span class="stats-popup-close" onclick="closeStatsPopup()" title="Close">&#x2715;</span>
+        </div>
+        <div id="statsBox"></div>
       </div>
-    </div>
-    <div class="systems-list" id="sysList"></div>
-    <div style="padding:8px 12px;border-top:1px solid var(--border);flex-shrink:0">
       <button class="btn btn-primary" style="width:100%;padding:8px" onclick="calculateRoute()">&#x25B6; CALCULATE ROUTE</button>
     </div>
   </div>
-  <div class="center">
+
+  <!-- RESIZE HANDLE: left | center -->
+  <div class="resize-handle" id="rh-left" title="Drag to resize"></div>
+
+  <!-- CENTER -->
+  <div class="center" id="centerCol">
     <canvas id="canvas"></canvas>
     <div class="bottom">
       <div class="bottom-header">
@@ -159,20 +219,98 @@
       <div id="status"></div>
     </div>
   </div>
-  <div class="right">
-    <div class="right-header">
-      <h2>Chains</h2>
-      <button class="btn btn-sm" onclick="exportChainsCSV()" title="Export chains as CSV">&#x2B07; CSV</button>
+
+  <!-- RESIZE HANDLE: center | right -->
+  <div class="resize-handle" id="rh-right" title="Drag to resize"></div>
+
+  <!-- RIGHT: Systems + Chains side by side -->
+  <div class="right" id="rightCol">
+    <!-- Systems sub-panel -->
+    <div class="right-systems" id="rightSystems">
+      <div class="right-systems-header">
+        <h2>Systems</h2>
+        <span id="sys-count" style="color:var(--text-muted);font-size:11px">0</span>
+      </div>
+      <div class="right-systems-list" id="sysList"></div>
     </div>
-    <div class="chains-panel" id="chainsPanel"></div>
-    <div style="padding:6px 8px;border-top:1px solid var(--border);flex-shrink:0">
-      <button class="add-chain-btn" onclick="addChain()">+ New Chain</button>
+
+    <!-- RESIZE HANDLE: systems | chains (within right col) -->
+    <div class="resize-handle" id="rh-inner" title="Drag to resize"></div>
+
+    <!-- Chains sub-panel -->
+    <div class="right-chains">
+      <div class="right-header">
+        <h2>Chains</h2>
+        <button class="btn btn-sm" onclick="exportChainsCSV()" title="Export chains as CSV">&#x2B07; CSV</button>
+      </div>
+      <div class="chains-panel" id="chainsPanel"></div>
+      <div style="padding:6px 8px;border-top:1px solid var(--border);flex-shrink:0">
+        <button class="add-chain-btn" onclick="addChain()">+ New Chain</button>
+      </div>
     </div>
-    <div class="stats-box" id="statsBox"></div>
   </div>
 </div>
 <script>
 let systems=[],chains=[],route=[],chainIdSeq=0;
+
+// ── Resize logic ──
+(function(){
+  function makeColResizer(handle, getLeft, setLeft, getRight, setRight, minL, minR) {
+    let dragging=false, startX=0, startL=0, startR=0;
+    handle.addEventListener('mousedown', e=>{
+      dragging=true; startX=e.clientX; startL=getLeft(); startR=getRight();
+      handle.classList.add('active');
+      document.body.style.cursor='col-resize';
+      document.body.style.userSelect='none';
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', e=>{
+      if(!dragging)return;
+      const dx=e.clientX-startX;
+      let nl=startL+dx, nr=startR-dx;
+      if(nl<minL){nl=minL;nr=startL+startR-minL;}
+      if(nr<minR){nr=minR;nl=startL+startR-minR;}
+      setLeft(nl); setRight(nr);
+    });
+    document.addEventListener('mouseup', ()=>{
+      if(!dragging)return;
+      dragging=false; handle.classList.remove('active');
+      document.body.style.cursor=''; document.body.style.userSelect='';
+      drawCanvas();
+    });
+  }
+
+  // Left col | center
+  makeColResizer(
+    document.getElementById('rh-left'),
+    ()=>document.getElementById('leftCol').offsetWidth,
+    w=>{ document.getElementById('leftCol').style.width=w+'px'; },
+    ()=>document.getElementById('centerCol').offsetWidth,
+    w=>{ /* center is flex:1, left width drives it */ },
+    140, 200
+  );
+
+  // center | right col
+  makeColResizer(
+    document.getElementById('rh-right'),
+    ()=>document.getElementById('centerCol').offsetWidth,
+    w=>{ document.getElementById('centerCol').style.flexBasis=w+'px'; document.getElementById('centerCol').style.flexGrow='0'; },
+    ()=>document.getElementById('rightCol').offsetWidth,
+    w=>{ document.getElementById('rightCol').style.width=w+'px'; },
+    200, 240
+  );
+
+  // inner right: systems | chains
+  makeColResizer(
+    document.getElementById('rh-inner'),
+    ()=>document.getElementById('rightSystems').offsetWidth,
+    w=>{ document.getElementById('rightSystems').style.width=w+'px'; },
+    ()=>document.getElementById('rightCol').offsetWidth - document.getElementById('rightSystems').offsetWidth - 5,
+    w=>{ /* chains is flex:1 */ },
+    100, 120
+  );
+})();
+
 function saveState(){const st={systems,chains,start:document.getElementById('startSel').value,end:document.getElementById('endSel').value};localStorage.setItem('route_opt_state',JSON.stringify(st));}
 function loadState(){try{const raw=localStorage.getItem('route_opt_state');if(!raw)return;const st=JSON.parse(raw);systems=st.systems||[];chains=st.chains||[];chainIdSeq=chains.reduce((m,c)=>Math.max(m,c.id||0),0)+1;renderSystems();renderChains();updateSelects(st.start,st.end);}catch(e){}}
 function addManual(){const name=document.getElementById('manualName').value.trim();const x=parseFloat(document.getElementById('manualX').value)||0;const y=parseFloat(document.getElementById('manualY').value)||0;const z=parseFloat(document.getElementById('manualZ').value)||0;if(!name){setStatus('Enter a name.','err');return;}if(systems.find(s=>s.name.toLowerCase()===name.toLowerCase())){setStatus(`"${name}" already exists.`,'err');return;}systems.push({name,x,y,z});['manualName','manualX','manualY','manualZ'].forEach(id=>document.getElementById(id).value='');renderSystems();updateSelects();saveState();setStatus(`Added "${name}".`,'ok');}
@@ -186,6 +324,10 @@ function addChain(){chains.push({id:chainIdSeq++,items:[]});renderChains();saveS
 function removeChain(id){chains=chains.filter(c=>c.id!==id);renderChains();saveState();}
 function removeChainItem(chainId,idx){const c=chains.find(c=>c.id===chainId);if(c){c.items.splice(idx,1);renderChains();saveState();}}
 function renderChains(){const panel=document.getElementById('chainsPanel');panel.innerHTML='';if(chains.length===0){panel.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:6px;font-style:italic">No chains yet.<br>Click "+ New Chain" below.</div>';return;}chains.forEach((chain,ci)=>{const block=document.createElement('div');block.className='chain-block';const header=document.createElement('div');header.className='chain-header';header.innerHTML=`<span>Chain ${ci+1}</span><button class="btn btn-sm btn-danger" onclick="removeChain(${chain.id})">&#x2715;</button>`;const zone=document.createElement('div');zone.className='chain-drop-zone';zone.dataset.chainId=chain.id;if(chain.items.length===0){zone.innerHTML='<span class="chain-empty">Drop systems here</span>';}else{chain.items.forEach((name,idx)=>{if(idx>0){const arr=document.createElement('span');arr.textContent='\u2192';arr.style.cssText='color:var(--text-muted);font-size:10px;align-self:center';zone.appendChild(arr);}const item=document.createElement('div');item.className='chain-item';item.draggable=true;item.dataset.chainId=chain.id;item.dataset.idx=idx;item.innerHTML=`${name}<span class="remove-item" onclick="removeChainItem(${chain.id},${idx})">&#x2715;</span>`;item.addEventListener('dragstart',e=>{e.dataTransfer.setData('chain-move',JSON.stringify({chainId:chain.id,idx}));e.dataTransfer.effectAllowed='move';});zone.appendChild(item);});}zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over');});zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-over');const chainId=parseInt(zone.dataset.chainId);const c=chains.find(c=>c.id===chainId);if(!c)return;const moveData=e.dataTransfer.getData('chain-move');if(moveData){const{chainId:srcId,idx:srcIdx}=JSON.parse(moveData);const src=chains.find(c=>c.id===srcId);if(!src)return;const name=src.items[srcIdx];src.items.splice(srcIdx,1);c.items.push(name);renderChains();saveState();return;}const name=e.dataTransfer.getData('text/plain');if(!name||!systems.find(s=>s.name===name))return;c.items.push(name);renderChains();saveState();});block.appendChild(header);block.appendChild(zone);panel.appendChild(block);});}
+
+// ── Stats popup ──
+function showStatsPopup(){document.getElementById('statsPopup').classList.add('visible');}
+function closeStatsPopup(){document.getElementById('statsPopup').classList.remove('visible');}
 
 // --- Export chains as CSV ---
 function exportChainsCSV(){const cc=chains.filter(c=>c.items.length>0);if(!cc.length){setStatus('No chains to export.','err');return;}const lines=['Chain,Position,Name,X,Y,Z'];cc.forEach((chain,ci)=>{chain.items.forEach((name,pos)=>{const s=systems.find(s=>s.name===name);const x=s?s.x:'',y=s?s.y:'',z=s?s.z:'';lines.push(`${ci+1},${pos+1},${name},${x},${y},${z}`);});});const blob=new Blob([lines.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chains.csv';a.click();setStatus(`Exported ${cc.length} chain(s) as CSV.`,'ok');}
@@ -260,9 +402,9 @@ function isValidRoute(r,cc){
     let p=0;
     for(const name of r){if(name===chain.items[p]){p++;if(p===chain.items.length)break;}}
     if(p<chain.items.length){
-	  console.log(`Chain: \n${JSON.stringify(chain)}\nnot valid for:\n${r}`);
-	  return false;
-	}
+      console.log(`Chain: \n${JSON.stringify(chain)}\nnot valid for:\n${r}`);
+      return false;
+    }
   }
   return true;
 }
@@ -313,7 +455,6 @@ function buildGreedyRoute(startName,endName,cc){
     progress=advanceProgress(best,progress,cc);
   }
   if(!chainsComplete(progress,cc))return null;
-  // Only append endName if it is not already the last stop (e.g. it was the tail of a chain)
   if(endName&&endName!==startName&&r[r.length-1]!==endName)r.push(endName);
   return r;
 }
@@ -411,7 +552,6 @@ function branchAndBound(startName,endName,cc,timeLimit){
       const fullDist=partialDist+(endSys&&route[route.length-1]!==endName?dist(curSys,endSys):0);
       if(fullDist<bestDist){
         bestDist=fullDist;
-        // Only append endName if not already the last stop
         bestRoute=(endName&&endName!==startName&&route[route.length-1]!==endName)?[...route,endName]:[...route];
       }
       continue;
@@ -475,7 +615,7 @@ function calculateRoute(){
   },20);
 }
 
-// --- Render route + stats ---
+// --- Render route + stats popup ---
 function renderRoute(elapsed,nodeCount,issues,optimality){
   const list=document.getElementById('routeList');
   const startName=document.getElementById('startSel').value;
@@ -513,6 +653,7 @@ function renderRoute(elapsed,nodeCount,issues,optimality){
     `<div><span class="stat-label">Self-check</span><span class="stat-val ${checkOk?'ok':'err'}">${checkOk?'\u2714 PASS':'\u2718 FAIL'}</span></div>`+
     (issues&&issues.length>0?issues.map(i=>`<div style="color:var(--danger);font-size:10px;clear:both">${i}</div>`).join(''):'')
   :'';
+  if(route.length>0) showStatsPopup();
 }
 
 // --- Canvas 3D ---
@@ -531,7 +672,7 @@ canvas.addEventListener('touchstart',e=>{lastTouch=e.touches[0];});
 canvas.addEventListener('touchmove',e=>{e.preventDefault();if(!lastTouch)return;const t=e.touches[0];camRot.y+=(t.clientX-lastTouch.clientX)*0.006;camRot.x+=(t.clientY-lastTouch.clientY)*0.006;lastTouch=t;drawCanvas();},{passive:false});
 window.addEventListener('resize',drawCanvas);
 function exportCSV(){if(!route.length){setStatus('Calculate a route first.','err');return;}const lines=['Name,X,Y,Z'];route.forEach(name=>{const s=systems.find(s=>s.name===name);if(s)lines.push(`${s.name},${s.x},${s.y},${s.z}`);});const blob=new Blob([lines.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='route.csv';a.click();setStatus('Route exported.','ok');}
-function clearAll(){if(!confirm('Clear all systems, chains, and route?'))return;systems=[];chains=[];route=[];renderSystems();renderChains();updateSelects();document.getElementById('routeList').innerHTML='';document.getElementById('route-summary').textContent='';document.getElementById('statsBox').innerHTML='';drawCanvas();localStorage.removeItem('route_opt_state');setStatus('Cleared.','info');}
+function clearAll(){if(!confirm('Clear all systems, chains, and route?'))return;systems=[];chains=[];route=[];renderSystems();renderChains();updateSelects();document.getElementById('routeList').innerHTML='';document.getElementById('route-summary').textContent='';document.getElementById('statsBox').innerHTML='';closeStatsPopup();drawCanvas();localStorage.removeItem('route_opt_state');setStatus('Cleared.','info');}
 function setStatus(msg,type){const el=document.getElementById('status');el.textContent=msg;el.className='status-'+(type||'info');}
 loadState();drawCanvas();
 </script>
