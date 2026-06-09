@@ -100,7 +100,7 @@
 <body>
 <header>
   <h1>⬡ 3D ROUTE OPTIMIZER</h1>
-  <span>TSP with chain ordering constraints · 3D visualization</span>
+  <span>TSP with chain ordering constraints · 3D visualization · B&B exact solver</span>
   <div style="flex:1"></div>
   <button class="btn btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
   <button class="btn btn-sm" onclick="clearAll()">✕ Clear All</button>
@@ -183,30 +183,28 @@ function addChain(){chains.push({id:chainIdSeq++,items:[]});renderChains();saveS
 function removeChain(id){chains=chains.filter(c=>c.id!==id);renderChains();saveState();}
 function removeChainItem(chainId,idx){const c=chains.find(c=>c.id===chainId);if(c){c.items.splice(idx,1);renderChains();saveState();}}
 function renderChains(){const panel=document.getElementById('chainsPanel');panel.innerHTML='';if(chains.length===0){panel.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:6px;font-style:italic">No chains yet.<br>Click "+ New Chain" below.</div>';return;}chains.forEach((chain,ci)=>{const block=document.createElement('div');block.className='chain-block';const header=document.createElement('div');header.className='chain-header';header.innerHTML=`<span>Chain ${ci+1}</span><button class="btn btn-sm btn-danger" onclick="removeChain(${chain.id})">✕</button>`;const zone=document.createElement('div');zone.className='chain-drop-zone';zone.dataset.chainId=chain.id;if(chain.items.length===0){zone.innerHTML='<span class="chain-empty">Drop systems here</span>';}else{chain.items.forEach((name,idx)=>{if(idx>0){const arr=document.createElement('span');arr.textContent='→';arr.style.cssText='color:var(--text-muted);font-size:10px;align-self:center';zone.appendChild(arr);}const item=document.createElement('div');item.className='chain-item';item.draggable=true;item.dataset.chainId=chain.id;item.dataset.idx=idx;item.innerHTML=`${name}<span class="remove-item" onclick="removeChainItem(${chain.id},${idx})">✕</span>`;item.addEventListener('dragstart',e=>{e.dataTransfer.setData('chain-move',JSON.stringify({chainId:chain.id,idx}));e.dataTransfer.effectAllowed='move';});zone.appendChild(item);});}zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over');});zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-over');const chainId=parseInt(zone.dataset.chainId);const c=chains.find(c=>c.id===chainId);if(!c)return;const moveData=e.dataTransfer.getData('chain-move');if(moveData){const{chainId:srcId,idx:srcIdx}=JSON.parse(moveData);const src=chains.find(c=>c.id===srcId);if(!src)return;const name=src.items[srcIdx];src.items.splice(srcIdx,1);c.items.push(name);renderChains();saveState();return;}const name=e.dataTransfer.getData('text/plain');if(!name||!systems.find(s=>s.name===name))return;c.items.push(name);renderChains();saveState();});block.appendChild(header);block.appendChild(zone);panel.appendChild(block);});}
+
+// ─── Core geometry ───────────────────────────────────────────────────────────
 function dist(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2);}
 function routeDist(names){let d=0;for(let i=0;i<names.length-1;i++){const a=systems.find(s=>s.name===names[i]);const b=systems.find(s=>s.name===names[i+1]);if(a&&b)d+=dist(a,b);}return d;}
-function isValidRoute(route,cc){for(const chain of cc){if(chain.items.length===0)continue;let p=0;for(const name of route){if(name===chain.items[p]){p++;if(p===chain.items.length)break;}}if(p<chain.items.length)return false;}return true;}
+
+// ─── Chain constraint helpers ─────────────────────────────────────────────────
+function isValidRoute(r,cc){for(const chain of cc){if(!chain.items.length)continue;let p=0;for(const name of r){if(name===chain.items[p]){p++;if(p===chain.items.length)break;}}if(p<chain.items.length)return false;}return true;}
 function initProgress(cc){return cc.map(()=>0);}
 function canVisit(name,progress,cc){
-  // For each chain, check that we are not trying to visit a node
-  // that appears later in the chain before earlier nodes are done.
-  // We track progress as the next required index per chain.
-  // A node is visitable if for every chain it appears in,
-  // its first unmatched occurrence index equals progress[ci].
   for(let ci=0;ci<cc.length;ci++){
-    const chain=cc[ci];
-    const p=progress[ci];
+    const chain=cc[ci];const p=progress[ci];
     if(p>=chain.items.length)continue;
-    // If this name appears in the chain at a position > p, block it
-    for(let j=p+1;j<chain.items.length;j++){
-      if(chain.items[j]===name&&chain.items[p]!==name)return false;
+    if(chain.items[p]===name)continue; // it's the next required node — allowed
+    // block if name appears later in this chain (must wait)
+    for(let j=p;j<chain.items.length;j++){
+      if(chain.items[j]===name)return false;
     }
   }
   return true;
 }
-function advanceProgress(name,progress,cc){const np=[...progress];for(let ci=0;ci<cc.length;ci++){const chain=cc[ci];if(np[ci]<chain.items.length&&chain.items[np[ci]]===name)np[ci]++;}return np;}
+function advanceProgress(name,progress,cc){const np=[...progress];for(let ci=0;ci<cc.length;ci++){const chain=cc[ci];while(np[ci]<chain.items.length&&chain.items[np[ci]]===name)np[ci]++;}return np;}
 function removeOneOccurrence(arr,value){const idx=arr.indexOf(value);if(idx===-1)return arr;return arr.filter((_,i)=>i!==idx);}
-// Compute required visit counts per system from chain definitions
 function computeRequiredCounts(allNames,cc){
   const req={};
   for(const name of allNames)req[name]=1;
@@ -217,107 +215,196 @@ function computeRequiredCounts(allNames,cc){
   }
   return req;
 }
-function buildExpandedAvailable(allNames,startName,endName,cc){
+function buildPool(allNames,startName,endName,cc){
+  // Returns the multiset of names that must be placed BETWEEN start and end.
+  // Start is already at pos 0; end will be appended last.
   const req=computeRequiredCounts(allNames,cc);
-  const available=[];
+  const pool=[];
   for(const name of allNames){
-    const totalCopies=req[name]||1;
-    if(name===startName){
-      // Start is already placed at position 0; add extra revisit slots
-      const extras=totalCopies-1;
-      for(let i=0;i<extras;i++)available.push(name);
-    } else if(endName&&endName!==startName&&name===endName){
-      // End is appended last; add extra revisit slots if needed
-      const extras=totalCopies-1;
-      for(let i=0;i<extras;i++)available.push(name);
-    } else {
-      for(let i=0;i<totalCopies;i++)available.push(name);
+    let copies=req[name]||1;
+    if(name===startName)copies--;   // one copy already placed at head
+    if(endName&&endName!==startName&&name===endName)copies--; // one copy held for tail
+    for(let i=0;i<copies;i++)pool.push(name);
+  }
+  return pool;
+}
+
+// ─── Prim's MST lower bound ───────────────────────────────────────────────────
+// mstCost(nodes) — nodes is array of system objects with .x .y .z
+function mstCost(nodes){
+  if(nodes.length<2)return 0;
+  const n=nodes.length;
+  const inMST=new Uint8Array(n);
+  const minEdge=new Float64Array(n).fill(Infinity);
+  minEdge[0]=0;
+  let total=0;
+  for(let iter=0;iter<n;iter++){
+    let u=-1;
+    for(let i=0;i<n;i++)if(!inMST[i]&&(u===-1||minEdge[i]<minEdge[u]))u=i;
+    inMST[u]=1;
+    total+=minEdge[u];
+    for(let v=0;v<n;v++){
+      if(inMST[v])continue;
+      const d=dist(nodes[u],nodes[v]);
+      if(d<minEdge[v])minEdge[v]=d;
     }
   }
-  return available;
+  return total;
 }
-function buildGreedyRoute(startName,endName,available,cc){
-  let route=[startName];
+
+// Lower bound for B&B node:
+// partialDist + dist(current→nearest remaining) + MST(remaining) + dist(nearest-in-remaining→end)
+function lowerBound(partialDist,currentSys,remainingSys,endSys){
+  if(remainingSys.length===0){
+    return partialDist+(endSys?dist(currentSys,endSys):0);
+  }
+  // cheapest edge out of current into remaining
+  let minOut=Infinity;
+  for(const s of remainingSys){const d=dist(currentSys,s);if(d<minOut)minOut=d;}
+  // MST over remaining
+  const mst=mstCost(remainingSys);
+  // cheapest edge from any remaining node into end (or 0 if no end)
+  let minIn=0;
+  if(endSys){
+    minIn=Infinity;
+    for(const s of remainingSys){const d=dist(s,endSys);if(d<minIn)minIn=d;}
+  }
+  return partialDist+minOut+mst+minIn;
+}
+
+// ─── Greedy nearest-neighbour seed ───────────────────────────────────────────
+function buildGreedyRoute(startName,endName,pool,cc){
+  let r=[startName];
   let progress=advanceProgress(startName,initProgress(cc),cc);
-  let remaining=[...available];
+  let remaining=[...pool];
   while(remaining.length>0){
-    const current=systems.find(s=>s.name===route[route.length-1]);
-    let bestName=null,bestDist=Infinity;
-    // Find unique candidate names respecting constraints
+    const cur=systems.find(s=>s.name===r[r.length-1]);
+    let best=null,bestD=Infinity;
     const seen=new Set();
     for(const name of remaining){
-      if(seen.has(name))continue;
-      seen.add(name);
+      if(seen.has(name))continue;seen.add(name);
       if(!canVisit(name,progress,cc))continue;
       const s=systems.find(s=>s.name===name);
-      if(!s)continue;
-      const d=dist(current,s);
-      if(d<bestDist){bestDist=d;bestName=name;}
+      const d=dist(cur,s);
+      if(d<bestD){bestD=d;best=name;}
     }
-    if(!bestName)return null;
-    route.push(bestName);
-    progress=advanceProgress(bestName,progress,cc);
-    remaining=removeOneOccurrence(remaining,bestName);
+    if(!best)return null;
+    r.push(best);
+    progress=advanceProgress(best,progress,cc);
+    remaining=removeOneOccurrence(remaining,best);
   }
-  if(endName&&endName!==startName)route.push(endName);
-  return route;
+  if(endName&&endName!==startName)r.push(endName);
+  return r;
 }
-function twoOpt(route,cc,startName,endName){const fixedStart=!!startName;const fixedEnd=!!(endName&&endName!==startName);let improved=true;let best=[...route];let bestD=routeDist(best);while(improved){improved=false;for(let i=fixedStart?1:0;i<best.length-2;i++){for(let j=i+1;j<best.length-(fixedEnd?1:0);j++){const newRoute=[...best.slice(0,i),...best.slice(i,j+1).reverse(),...best.slice(j+1)];if(!isValidRoute(newRoute,cc))continue;const newD=routeDist(newRoute);if(newD<bestD-0.001){best=newRoute;bestD=newD;improved=true;}}}}return best;}
-function perturbRoute(route,startName,endName){const fixStart=!!startName;const fixEnd=!!(endName&&endName!==startName);const inner=route.slice(fixStart?1:0,route.length-(fixEnd?1:0));if(inner.length<2)return route;const i=Math.floor(Math.random()*inner.length);const j=Math.floor(Math.random()*inner.length);[inner[i],inner[j]]=[inner[j],inner[i]];return[...(fixStart?[startName]:[]),...inner,...(fixEnd?[endName]:[])];}
-function selfCheck(route,cc,startName,endName){
+
+// ─── Branch & Bound ──────────────────────────────────────────────────────────
+function branchAndBound(startName,endName,pool,cc,timeLimit){
+  const deadline=Date.now()+timeLimit;
+  const endSys=endName?systems.find(s=>s.name===endName):null;
+
+  // Greedy seed gives initial upper bound
+  let bestRoute=buildGreedyRoute(startName,endName,pool,cc);
+  let bestDist=bestRoute?routeDist(bestRoute):Infinity;
+  let timedOut=false;
+  let nodesChecked=0;
+
+  // Iterative DFS using explicit stack to avoid call-stack overflow
+  // Stack frame: {route, remaining, progress, partialDist}
+  const startSys=systems.find(s=>s.name===startName);
+  const initProg=advanceProgress(startName,initProgress(cc),cc);
+
+  const stack=[{route:[startName],remaining:pool.slice(),progress:initProg,partialDist:0}];
+
+  while(stack.length>0){
+    if(Date.now()>=deadline){timedOut=true;break;}
+    const {route,remaining,progress,partialDist}=stack.pop();
+    nodesChecked++;
+
+    // Leaf node — complete route
+    if(remaining.length===0){
+      const fullDist=partialDist+(endSys?dist(systems.find(s=>s.name===route[route.length-1]),endSys):0);
+      if(fullDist<bestDist){
+        bestDist=fullDist;
+        bestRoute=endName&&endName!==startName?[...route,endName]:[...route];
+      }
+      continue;
+    }
+
+    // Generate candidates: unique names, constraint-respecting, sorted by dist ASC
+    const curSys=systems.find(s=>s.name===route[route.length-1]);
+    const seen=new Set();
+    const candidates=[];
+    for(const name of remaining){
+      if(seen.has(name))continue;seen.add(name);
+      if(!canVisit(name,progress,cc))continue;
+      const s=systems.find(s=>s.name===name);
+      candidates.push({name,sys:s,d:dist(curSys,s)});
+    }
+    candidates.sort((a,b)=>a.d-b.d);
+
+    // Push in REVERSE order so nearest is popped first
+    for(let i=candidates.length-1;i>=0;i--){
+      const {name,sys,d}=candidates[i];
+      const newPartial=partialDist+d;
+      const newRemaining=removeOneOccurrence(remaining,name);
+      const remainingSys=newRemaining.map(n=>systems.find(s=>s.name===n));
+      const lb=lowerBound(newPartial,sys,remainingSys,endSys);
+      if(lb>=bestDist)continue; // prune
+      const newProgress=advanceProgress(name,progress,cc);
+      stack.push({route:[...route,name],remaining:newRemaining,progress:newProgress,partialDist:newPartial});
+    }
+  }
+
+  return{route:bestRoute,dist:bestDist,timedOut,nodesChecked};
+}
+
+// ─── Self-check ───────────────────────────────────────────────────────────────
+function selfCheck(r,cc,startName,endName){
   const issues=[];
   const allNames=systems.map(s=>s.name);
-  const expectedCounts=computeRequiredCounts(allNames,cc);
-  const countMap={};
-  for(const n of route)countMap[n]=(countMap[n]||0)+1;
-  for(const n of allNames){
-    const got=countMap[n]||0;
-    const exp=expectedCounts[n]||1;
-    if(got!==exp)issues.push(`"${n}" visited ${got}x (expected ${exp})`);
-  }
-  for(const n of route){if(!systems.find(s=>s.name===n))issues.push(`Unknown system "${n}" in route`);}
-  if(!isValidRoute(route,cc))issues.push('Chain order constraints violated!');
-  if(startName&&route[0]!==startName)issues.push(`Route does not start at "${startName}"`);
-  if(endName&&endName!==startName&&route[route.length-1]!==endName)issues.push(`Route does not end at "${endName}"`);
+  const exp=computeRequiredCounts(allNames,cc);
+  const got={};
+  for(const n of r)got[n]=(got[n]||0)+1;
+  for(const n of allNames){const g=got[n]||0;const e=exp[n]||1;if(g!==e)issues.push(`"${n}" visited ${g}x (expected ${e})`);}
+  for(const n of r)if(!systems.find(s=>s.name===n))issues.push(`Unknown system "${n}"`);
+  if(!isValidRoute(r,cc))issues.push('Chain order constraints violated!');
+  if(startName&&r[0]!==startName)issues.push(`Does not start at "${startName}"`);
+  if(endName&&endName!==startName&&r[r.length-1]!==endName)issues.push(`Does not end at "${endName}"`);
   return issues;
 }
+
+// ─── Main calculate entry point ───────────────────────────────────────────────
 function calculateRoute(){
   const startName=document.getElementById('startSel').value;
-  const endName=document.getElementById('endSel').value;
+  const endName=document.getElementById('endSel').value||null;
   const cc=chains.filter(c=>c.items.length>0);
   if(systems.length<2){setStatus('Need at least 2 systems.','err');return;}
   if(!startName){setStatus('Select a start system.','err');return;}
-  setStatus('Calculating…','info');
+  setStatus('Running B&B…','info');
   const t0=Date.now();
-  setTimeout(()=>{try{
-    const allNames=systems.map(s=>s.name);
-    const available=buildExpandedAvailable(allNames,startName,endName||null,cc);
-    let best=buildGreedyRoute(startName,endName||null,available,cc);
-    if(!best){setStatus('Cannot build route: constraint chains may be unsatisfiable.','err');return;}
-    let bestD=routeDist(best);
-    best=twoOpt(best,cc,startName,endName||null);
-    bestD=routeDist(best);
-    const ITERS=Math.min(80,10*systems.length);
-    let itersRun=0;
-    for(let iter=0;iter<ITERS;iter++){
-      let candidate=perturbRoute(best,startName,endName||null);
-      if(!isValidRoute(candidate,cc))continue;
-      candidate=twoOpt(candidate,cc,startName,endName||null);
-      const cd=routeDist(candidate);
-      if(cd<bestD-0.001){best=candidate;bestD=cd;}
-      itersRun++;
-    }
-    const elapsed=Date.now()-t0;
-    route=best;
-    const issues=selfCheck(route,cc,startName,endName||null);
-    renderRoute(elapsed,itersRun,issues);
-    drawCanvas();
-    saveState();
-    if(issues.length>0){setStatus(`⚠ Route found but ${issues.length} issue(s): ${issues[0]}${issues.length>1?' (…)':''}`,'warn');}
-    else{setStatus(`✔ Route OK · ${route.length} systems · ${bestD.toFixed(1)} ly · ${elapsed}ms`,'ok');}
-  }catch(e){setStatus('Error: '+e.message,'err');}},30);
+  setTimeout(()=>{
+    try{
+      const allNames=systems.map(s=>s.name);
+      const pool=buildPool(allNames,startName,endName,cc);
+      const TIME_LIMIT=9500; // 9.5s hard cap
+      const {route:best,dist:bestDist,timedOut,nodesChecked}=branchAndBound(startName,endName,pool,cc,TIME_LIMIT);
+      if(!best){setStatus('No valid route found — check chain constraints.','err');return;}
+      const elapsed=Date.now()-t0;
+      route=best;
+      const issues=selfCheck(route,cc,startName,endName);
+      const optimality=timedOut?'best-in-time':'optimal';
+      renderRoute(elapsed,nodesChecked,issues,optimality);
+      drawCanvas();
+      saveState();
+      if(issues.length>0)setStatus(`⚠ ${issues[0]}`,'warn');
+      else if(timedOut)setStatus(`⏱ Timeout — best found: ${bestDist.toFixed(1)} ly · ${nodesChecked} nodes · ${elapsed}ms`,'warn');
+      else setStatus(`✔ Optimal: ${bestDist.toFixed(1)} ly · ${nodesChecked} nodes · ${elapsed}ms`,'ok');
+    }catch(e){setStatus('Error: '+e.message,'err');console.error(e);}
+  },20);
 }
-function renderRoute(elapsed,itersRun,issues){
+
+// ─── Render route + stats ─────────────────────────────────────────────────────
+function renderRoute(elapsed,nodeCount,issues,optimality){
   const list=document.getElementById('routeList');
   const startName=document.getElementById('startSel').value;
   const endName=document.getElementById('endSel').value||startName;
@@ -329,37 +416,38 @@ function renderRoute(elapsed,itersRun,issues){
       const b=systems.find(s=>s.name===name);
       const d=(a&&b)?dist(a,b):0;
       totalDist+=d;
-      const arrow=document.createElement('div');
-      arrow.className='route-step';
+      const arrow=document.createElement('div');arrow.className='route-step';
       arrow.innerHTML=`<span class="route-arrow">→</span><span class="route-dist">${d.toFixed(1)}</span>`;
       list.appendChild(arrow);
     }
-    const node=document.createElement('div');
-    node.className='route-step';
+    const node=document.createElement('div');node.className='route-step';
     const isStart=name===startName&&i===0;
     const isEnd=name===endName&&i===route.length-1;
-    node.innerHTML=`<span class="route-node ${isStart?'start-node':''} ${isEnd?'end-node':''}}">${i+1}. ${name}</span>`;
+    node.innerHTML=`<span class="route-node ${isStart?'start-node':''} ${isEnd?'end-node':''}">${i+1}. ${name}</span>`;
     list.appendChild(node);
   });
   document.getElementById('route-summary').textContent=route.length>0?`${route.length} stops · ${totalDist.toFixed(1)} ly`:'';
-  const checkOk=(issues&&issues.length===0);
-  const statsBox=document.getElementById('statsBox');
-  statsBox.innerHTML=route.length>0?
+  const checkOk=issues&&issues.length===0;
+  const isOptimal=optimality==='optimal';
+  document.getElementById('statsBox').innerHTML=route.length>0?
     `<div><span class="stat-label">Systems</span><span class="stat-val">${systems.length}</span></div>`+
     `<div><span class="stat-label">Route stops</span><span class="stat-val">${route.length}</span></div>`+
     `<div><span class="stat-label">Total dist.</span><span class="stat-val">${totalDist.toFixed(1)} ly</span></div>`+
     `<div><span class="stat-label">Jumps</span><span class="stat-val">${route.length-1}</span></div>`+
-    `<div><span class="stat-label">Iterations</span><span class="stat-val">${itersRun!==undefined?itersRun:'—'}</span></div>`+
-    `<div><span class="stat-label">Time</span><span class="stat-val">${elapsed!==undefined?elapsed+'ms':'—'}</span></div>`+
+    `<div><span class="stat-label">B&B nodes</span><span class="stat-val">${nodeCount.toLocaleString()}</span></div>`+
+    `<div><span class="stat-label">Time</span><span class="stat-val">${elapsed}ms</span></div>`+
+    `<div><span class="stat-label">Optimality</span><span class="stat-val ${isOptimal?'ok':''}">${isOptimal?'★ Optimal':'⏱ Best/time'}</span></div>`+
     `<div><span class="stat-label">Self-check</span><span class="stat-val ${checkOk?'ok':'err'}">${checkOk?'✔ PASS':'✘ FAIL'}</span></div>`+
     (issues&&issues.length>0?issues.map(i=>`<div style="color:var(--danger);font-size:10px;clear:both">${i}</div>`).join(''):'')
   :'';
 }
+
+// ─── Canvas 3D ────────────────────────────────────────────────────────────────
 let camRot={x:0.4,y:0.3},camZoom=1,isDragging=false,lastMouse={x:0,y:0},normalizedSystems=[];
 const canvas=document.getElementById('canvas');const ctx=canvas.getContext('2d');
-function normalize(){if(systems.length===0){normalizedSystems=[];return;}const xs=systems.map(s=>s.x),ys=systems.map(s=>s.y),zs=systems.map(s=>s.z);const minX=Math.min(...xs),maxX=Math.max(...xs);const minY=Math.min(...ys),maxY=Math.max(...ys);const minZ=Math.min(...zs),maxZ=Math.max(...zs);const range=Math.max(maxX-minX,maxY-minY,maxZ-minZ,1);normalizedSystems=systems.map(s=>({name:s.name,nx:(s.x-(minX+maxX)/2)/range,ny:(s.y-(minY+maxY)/2)/range,nz:(s.z-(minZ+maxZ)/2)/range}));}
-function project(nx,ny,nz){const cosY=Math.cos(camRot.y),sinY=Math.sin(camRot.y);const rx=nx*cosY-nz*sinY;const rz=nx*sinY+nz*cosY;const cosX=Math.cos(camRot.x),sinX=Math.sin(camRot.x);const ry2=ny*cosX-rz*sinX;const scale=camZoom*Math.min(canvas.width,canvas.height)*0.38;return{sx:canvas.width/2+rx*scale,sy:canvas.height/2-ry2*scale,depth:rz*cosX+ny*sinX};}
-function drawCanvas(){normalize();canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;ctx.clearRect(0,0,canvas.width,canvas.height);if(systems.length===0){ctx.fillStyle='#30363d';ctx.font='14px Segoe UI';ctx.textAlign='center';ctx.fillText('Import or add systems to begin',canvas.width/2,canvas.height/2);return;}const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value||startName;ctx.strokeStyle='rgba(48,54,61,0.4)';ctx.lineWidth=0.5;for(let v=-0.5;v<=0.5;v+=0.25){const p1=project(v,-0.5,0),p2=project(v,0.5,0);const p3=project(-0.5,v,0),p4=project(0.5,v,0);ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();ctx.beginPath();ctx.moveTo(p3.sx,p3.sy);ctx.lineTo(p4.sx,p4.sy);ctx.stroke();}if(route.length>1){for(let i=0;i<route.length-1;i++){const a=normalizedSystems.find(s=>s.name===route[i]);const b=normalizedSystems.find(s=>s.name===route[i+1]);if(!a||!b)continue;const pa=project(a.nx,a.ny,a.nz);const pb=project(b.nx,b.ny,b.nz);ctx.strokeStyle='rgba(88,166,255,0.6)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(pa.sx,pa.sy);ctx.lineTo(pb.sx,pb.sy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(88,166,255,0.7)';ctx.font='9px Segoe UI';ctx.textAlign='center';ctx.fillText(i+1,(pa.sx+pb.sx)/2,(pa.sy+pb.sy)/2-3);}}const projected=normalizedSystems.map(s=>{const p=project(s.nx,s.ny,s.nz);return{...s,...p};}).sort((a,b)=>a.depth-b.depth);projected.forEach(s=>{const inRoute=route.includes(s.name);const isStart=s.name===startName;const isEnd=s.name===endName&&endName;const color=isStart?'#3fb950':isEnd?'#f85149':inRoute?'#58a6ff':'#444c56';const r=isStart||isEnd?6:inRoute?5:3.5;ctx.beginPath();ctx.arc(s.sx,s.sy,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();if(inRoute||isStart||isEnd){ctx.strokeStyle=color;ctx.lineWidth=1;ctx.globalAlpha=0.3;ctx.beginPath();ctx.arc(s.sx,s.sy,r+3,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;}ctx.fillStyle=inRoute?'#c9d1d9':'#8b949e';ctx.font=(isStart||isEnd)?'bold 11px Segoe UI':'10px Segoe UI';ctx.textAlign='left';ctx.fillText(s.name,s.sx+r+3,s.sy+4);});}
+function normalize(){if(!systems.length){normalizedSystems=[];return;}const xs=systems.map(s=>s.x),ys=systems.map(s=>s.y),zs=systems.map(s=>s.z);const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),minZ=Math.min(...zs),maxZ=Math.max(...zs);const range=Math.max(maxX-minX,maxY-minY,maxZ-minZ,1);normalizedSystems=systems.map(s=>({name:s.name,nx:(s.x-(minX+maxX)/2)/range,ny:(s.y-(minY+maxY)/2)/range,nz:(s.z-(minZ+maxZ)/2)/range}));}
+function project(nx,ny,nz){const cosY=Math.cos(camRot.y),sinY=Math.sin(camRot.y);const rx=nx*cosY-nz*sinY,rz=nx*sinY+nz*cosY;const cosX=Math.cos(camRot.x),sinX=Math.sin(camRot.x);const ry2=ny*cosX-rz*sinX;const scale=camZoom*Math.min(canvas.width,canvas.height)*0.38;return{sx:canvas.width/2+rx*scale,sy:canvas.height/2-ry2*scale,depth:rz*cosX+ny*sinX};}
+function drawCanvas(){normalize();canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;ctx.clearRect(0,0,canvas.width,canvas.height);if(!systems.length){ctx.fillStyle='#30363d';ctx.font='14px Segoe UI';ctx.textAlign='center';ctx.fillText('Import or add systems to begin',canvas.width/2,canvas.height/2);return;}const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value||startName;ctx.strokeStyle='rgba(48,54,61,0.4)';ctx.lineWidth=0.5;for(let v=-0.5;v<=0.5;v+=0.25){const p1=project(v,-0.5,0),p2=project(v,0.5,0),p3=project(-0.5,v,0),p4=project(0.5,v,0);ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();ctx.beginPath();ctx.moveTo(p3.sx,p3.sy);ctx.lineTo(p4.sx,p4.sy);ctx.stroke();}if(route.length>1){for(let i=0;i<route.length-1;i++){const a=normalizedSystems.find(s=>s.name===route[i]),b=normalizedSystems.find(s=>s.name===route[i+1]);if(!a||!b)continue;const pa=project(a.nx,a.ny,a.nz),pb=project(b.nx,b.ny,b.nz);ctx.strokeStyle='rgba(88,166,255,0.6)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(pa.sx,pa.sy);ctx.lineTo(pb.sx,pb.sy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(88,166,255,0.7)';ctx.font='9px Segoe UI';ctx.textAlign='center';ctx.fillText(i+1,(pa.sx+pb.sx)/2,(pa.sy+pb.sy)/2-3);}}const projected=normalizedSystems.map(s=>{const p=project(s.nx,s.ny,s.nz);return{...s,...p};}).sort((a,b)=>a.depth-b.depth);projected.forEach(s=>{const inRoute=route.includes(s.name),isStart=s.name===startName,isEnd=s.name===endName&&endName;const color=isStart?'#3fb950':isEnd?'#f85149':inRoute?'#58a6ff':'#444c56';const r=isStart||isEnd?6:inRoute?5:3.5;ctx.beginPath();ctx.arc(s.sx,s.sy,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();if(inRoute||isStart||isEnd){ctx.strokeStyle=color;ctx.lineWidth=1;ctx.globalAlpha=0.3;ctx.beginPath();ctx.arc(s.sx,s.sy,r+3,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;}ctx.fillStyle=inRoute?'#c9d1d9':'#8b949e';ctx.font=(isStart||isEnd)?'bold 11px Segoe UI':'10px Segoe UI';ctx.textAlign='left';ctx.fillText(s.name,s.sx+r+3,s.sy+4);});}
 canvas.addEventListener('mousedown',e=>{isDragging=true;lastMouse={x:e.clientX,y:e.clientY};});
 canvas.addEventListener('mousemove',e=>{if(!isDragging)return;camRot.y+=(e.clientX-lastMouse.x)*0.006;camRot.x+=(e.clientY-lastMouse.y)*0.006;lastMouse={x:e.clientX,y:e.clientY};drawCanvas();});
 canvas.addEventListener('mouseup',()=>isDragging=false);
@@ -369,7 +457,7 @@ let lastTouch=null;
 canvas.addEventListener('touchstart',e=>{lastTouch=e.touches[0];});
 canvas.addEventListener('touchmove',e=>{e.preventDefault();if(!lastTouch)return;const t=e.touches[0];camRot.y+=(t.clientX-lastTouch.clientX)*0.006;camRot.x+=(t.clientY-lastTouch.clientY)*0.006;lastTouch=t;drawCanvas();},{passive:false});
 window.addEventListener('resize',drawCanvas);
-function exportCSV(){if(route.length===0){setStatus('Calculate a route first.','err');return;}const lines=['Name,X,Y,Z'];route.forEach(name=>{const s=systems.find(s=>s.name===name);if(s)lines.push(`${s.name},${s.x},${s.y},${s.z}`);});const blob=new Blob([lines.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='route.csv';a.click();setStatus('Route exported.','ok');}
+function exportCSV(){if(!route.length){setStatus('Calculate a route first.','err');return;}const lines=['Name,X,Y,Z'];route.forEach(name=>{const s=systems.find(s=>s.name===name);if(s)lines.push(`${s.name},${s.x},${s.y},${s.z}`);});const blob=new Blob([lines.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='route.csv';a.click();setStatus('Route exported.','ok');}
 function clearAll(){if(!confirm('Clear all systems, chains, and route?'))return;systems=[];chains=[];route=[];renderSystems();renderChains();updateSelects();document.getElementById('routeList').innerHTML='';document.getElementById('route-summary').textContent='';document.getElementById('statsBox').innerHTML='';drawCanvas();localStorage.removeItem('route_opt_state');setStatus('Cleared.','info');}
 function setStatus(msg,type){const el=document.getElementById('status');el.textContent=msg;el.className='status-'+(type||'info');}
 loadState();drawCanvas();
