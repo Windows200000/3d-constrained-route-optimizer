@@ -55,9 +55,9 @@ The specific algorithm used is an implementation detail — what matters is the 
 - **Browser-based**: no install, no dependencies — open `index.html` and go
 - **3D interactive canvas**: drag to rotate, scroll to zoom
 - **Drag-and-drop** interface for building and editing chains
-- **CSV import/export** in `Name,X,Y,Z` format; paste directly or load a file
+- **Import Systems CSV** in `Name,X,Y,Z` format; paste directly or load a file; header row auto-detected
+- **Import Chains CSV** in `Chain,Position,Name,X,Y,Z` format (same format as export); paste or load file; automatically adds any missing systems; replaces current chains
+- **Export Chains CSV**: right panel `↓ CSV` button exports all chains to `chains.csv` with columns `Chain,Position,Name,X,Y,Z`
+- **Export Route CSV**: header button exports the solved route as `route.csv` in `Name,X,Y,Z` format
 - **Manual entry**: add systems one by one with coordinates
-- Header row in CSV is auto-detected and optional
-- **Legend removed** from right panel — chains panel now fills the full height (`flex:1`) for better usability with many chains
-- **Export Chains CSV**: the right panel header has a `↓ CSV` button that exports all chains to `chains.csv` with columns `Chain,Position,Name,X,Y,Z`
-- **Export Route CSV**: header button (renamed to "Export Route CSV") exports the solved route as `route.csv` in `Name,X,Y,Z` format
+- **Legend removed** from right panel — chains panel fills full height

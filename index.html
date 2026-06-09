@@ -122,11 +122,19 @@
       </div>
     </div>
     <div class="panel-section">
-      <h2>Import CSV (Name,X,Y,Z)</h2>
-      <textarea id="csvInput" rows="4" placeholder="Paste CSV here&#10;Name,X,Y,Z&#10;Sol,0,0,0"></textarea>
+      <h2>Import Systems CSV (Name,X,Y,Z)</h2>
+      <textarea id="csvInput" rows="3" placeholder="Paste CSV here&#10;Name,X,Y,Z&#10;Sol,0,0,0"></textarea>
       <div class="row" style="margin-top:6px">
         <button class="btn" style="flex:1" onclick="importCSV()">Import</button>
         <label class="btn" style="flex:1;text-align:center;cursor:pointer">Load File <input type="file" accept=".csv" onchange="loadFile(event)" style="display:none"></label>
+      </div>
+    </div>
+    <div class="panel-section">
+      <h2>Import Chains CSV</h2>
+      <textarea id="chainsInput" rows="3" placeholder="Chain,Position,Name,X,Y,Z&#10;1,1,Sol,0,0,0&#10;1,2,Colonia,5569.9,26.7,-9598.6"></textarea>
+      <div class="row" style="margin-top:6px">
+        <button class="btn" style="flex:1" onclick="importChainsCSV()">Import</button>
+        <label class="btn" style="flex:1;text-align:center;cursor:pointer">Load File <input type="file" accept=".csv" onchange="loadChainsFile(event)" style="display:none"></label>
       </div>
     </div>
     <div class="panel-section" style="flex-shrink:0">
@@ -181,6 +189,37 @@ function renderChains(){const panel=document.getElementById('chainsPanel');panel
 
 // --- Export chains as CSV ---
 function exportChainsCSV(){const cc=chains.filter(c=>c.items.length>0);if(!cc.length){setStatus('No chains to export.','err');return;}const lines=['Chain,Position,Name,X,Y,Z'];cc.forEach((chain,ci)=>{chain.items.forEach((name,pos)=>{const s=systems.find(s=>s.name===name);const x=s?s.x:'',y=s?s.y:'',z=s?s.z:'';lines.push(`${ci+1},${pos+1},${name},${x},${y},${z}`);});});const blob=new Blob([lines.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chains.csv';a.click();setStatus(`Exported ${cc.length} chain(s) as CSV.`,'ok');}
+
+// --- Import chains as CSV ---
+function loadChainsFile(evt){const file=evt.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{parseChainsCSVText(e.target.result);evt.target.value='';};reader.readAsText(file);}
+function importChainsCSV(){const text=document.getElementById('chainsInput').value.trim();if(!text){setStatus('Paste chains CSV first.','err');return;}parseChainsCSVText(text);}
+function parseChainsCSVText(text){
+  const lines=text.trim().split(/\r?\n/);
+  let start=0;
+  const firstCols=lines[0].split(',');
+  if(firstCols[0].toLowerCase().includes('chain')||isNaN(parseInt(firstCols[0])))start=1;
+  let sysAdded=0,chCount=0;
+  const chainMap={};
+  for(let i=start;i<lines.length;i++){
+    const parts=lines[i].split(',').map(s=>s.trim().replace(/^"|"$/g,''));
+    if(!parts[0])continue;
+    const chainIdx=parseInt(parts[0]);
+    const pos=parseInt(parts[1]);
+    const name=parts[2];
+    const x=parseFloat(parts[3])||0;
+    const y=parseFloat(parts[4])||0;
+    const z=parseFloat(parts[5])||0;
+    if(!name||isNaN(chainIdx)||isNaN(pos))continue;
+    if(!systems.find(s=>s.name.toLowerCase()===name.toLowerCase())){systems.push({name,x,y,z});sysAdded++;}
+    if(!chainMap[chainIdx]){chainMap[chainIdx]=[];chCount++;}
+    chainMap[chainIdx].push({pos,name});
+  }
+  if(!chCount){setStatus('No valid chain data found.','err');return;}
+  chains=Object.values(chainMap).map(entries=>({id:chainIdSeq++,items:entries.sort((a,b)=>a.pos-b.pos).map(e=>e.name)}));
+  renderSystems();renderChains();updateSelects();saveState();
+  setStatus(`Imported ${chCount} chain(s), ${sysAdded} new system(s).`,'ok');
+  document.getElementById('chainsInput').value='';
+}
 
 // --- Core geometry ---
 function dist(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2);}
@@ -452,8 +491,10 @@ function renderRoute(elapsed,nodeCount,issues,optimality){
     const node=document.createElement('div');node.className='route-step';
     const isStart=name===startName&&i===0;
     const isEnd=name===endName&&i===route.length-1;
-    node.innerHTML=`<span class="route-node ${isStart?'start-node':''} ${isEnd?'end-node':''}">{{i+1}}. ${name}</span>`;
-    node.querySelector('span').textContent=`${i+1}. ${name}`;
+    const span=document.createElement('span');
+    span.className='route-node'+(isStart?' start-node':isEnd?' end-node':'');
+    span.textContent=`${i+1}. ${name}`;
+    node.appendChild(span);
     list.appendChild(node);
   });
   document.getElementById('route-summary').textContent=route.length>0?`${route.length} stops \u00b7 ${totalDist.toFixed(1)} ly`:'';
