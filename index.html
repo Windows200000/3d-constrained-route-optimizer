@@ -205,24 +205,21 @@ function advanceProgress(name,progress,cc){
 //   - name is the immediate next node in at least one chain → allow (revisit ok)
 //   - name appears later in a chain but isn't next, and hasn't been visited → block
 // `visited` is a Set of already-visited system names.
-function canVisit(name,visited,progress,cc){
-  // Check if any unfinished chain is waiting for this name at some future position
-  let pendingInChain=false;
-  let nextInSome=false;
-  for(let ci=0;ci<cc.length;ci++){
-    const chain=cc[ci];const p=progress[ci];
-    if(p>=chain.items.length)continue;
-    if(chain.items[p]===name){nextInSome=true;pendingInChain=true;break;}
-    // name appears later in this chain but is not next — blocked
-    for(let j=p+1;j<chain.items.length;j++){
-      if(chain.items[j]===name){pendingInChain=true;break;}
+function canVisit(name, visited, progress, cc){
+  let pendingInChain = false;
+  let nextInSome = false;
+  for(let ci=0; ci<cc.length; ci++){
+    const chain=cc[ci]; const p=progress[ci];
+    if(p>=chain.items.length) continue;
+    if(chain.items[p]===name){ nextInSome=true; break; } // next in this chain → done
+    for(let j=p+1; j<chain.items.length; j++){
+      if(chain.items[j]===name){ pendingInChain=true; break; }
     }
-    if(nextInSome) break;
   }
-  if(nextInSome)return true;          // required next by at least one chain
-  if(pendingInChain)return false;     // needed later in a chain, not yet its turn
-  if(visited.has(name))return false;  // already visited, not chain-required
-  return true;                        // free system, not yet visited
+  if(nextInSome) return true;
+  if(pendingInChain) return false;
+  if(visited.has(name)) return false;
+  return true;
 }
 
 // Collect all visitable system names given current state.
