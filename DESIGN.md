@@ -39,6 +39,7 @@ The specific algorithm used is an implementation detail — what matters is the 
 
 - **Fixed start & end points** must be supported, including **circular routes** (same start and end)
 - The route must visit every system exactly once (except where chain repetition requires otherwise)
+- **End system deduplication**: if the designated end system is also the last item in a chain, it will be visited naturally during the solver loop and must **not** be appended again at the tail of the route. Both `buildGreedyRoute` and `branchAndBound` check `route[last] !== endName` before appending the end node.
 
 ---
 

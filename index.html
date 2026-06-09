@@ -313,7 +313,8 @@ function buildGreedyRoute(startName,endName,cc){
     progress=advanceProgress(best,progress,cc);
   }
   if(!chainsComplete(progress,cc))return null;
-  if(endName&&endName!==startName)r.push(endName);
+  // Only append endName if it is not already the last stop (e.g. it was the tail of a chain)
+  if(endName&&endName!==startName&&r[r.length-1]!==endName)r.push(endName);
   return r;
 }
 
@@ -407,10 +408,11 @@ function branchAndBound(startName,endName,cc,timeLimit){
     if(candidates.length===0){
       if(!chainsComplete(progress,cc))continue;
       const curSys=systems.find(s=>s.name===route[route.length-1]);
-      const fullDist=partialDist+(endSys?dist(curSys,endSys):0);
+      const fullDist=partialDist+(endSys&&route[route.length-1]!==endName?dist(curSys,endSys):0);
       if(fullDist<bestDist){
         bestDist=fullDist;
-        bestRoute=endName&&endName!==startName?[...route,endName]:[...route];
+        // Only append endName if not already the last stop
+        bestRoute=(endName&&endName!==startName&&route[route.length-1]!==endName)?[...route,endName]:[...route];
       }
       continue;
     }
