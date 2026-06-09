@@ -242,10 +242,15 @@ let _solveDeadline=0, _liveBestDist=Infinity, _tickerInterval=null, _solveT0=0;
 // ── Download HTML from GitHub raw ──
 function downloadHTML(){
   const url='https://raw.githubusercontent.com/Windows200000/3d-constrained-route-optimizer/main/index.html';
-  const a=document.createElement('a');
-  a.href=url;
-  a.download='route-optimizer.html';
-  a.click();
+  setStatus('Downloading…','info');
+  fetch(url).then(r=>r.blob()).then(blob=>{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='route-optimizer.html';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+    setStatus('Downloaded route-optimizer.html','ok');
+  }).catch(()=>setStatus('Download failed — try saving the page manually.','err'));
 }
 
 // ── Ticker (runs on main thread, ticks freely because solver is in a Worker) ──
