@@ -62,3 +62,35 @@ The specific algorithm used is an implementation detail — what matters is the 
 - **Export Route CSV**: header button exports the solved route as `route.csv` in `Name,X,Y,Z` format
 - **Manual entry**: add systems one by one with coordinates
 - **Legend removed** from right panel — chains panel fills full height
+
+---
+
+## UI Layout
+
+### Column Structure (left → center → right)
+
+- **Left column** (default 220px, min 140px): Route endpoints, manual add, import sections, Calculate button
+- **Center column** (flex:1): 3D canvas + route list at bottom
+- **Right column** (default 460px): Systems list and Chains panel **side by side** within the right column
+  - **Systems sub-panel** (default 180px): scrollable list of all systems, draggable to chains
+  - **Chains sub-panel** (flex:1): chain blocks, add chain button
+
+### Resizable Panels
+
+- **All column boundaries are draggable** via 5px resize handles between columns
+- Handles: left|center, center|right, systems|chains (within right col)
+- Cursor changes to `col-resize` on hover; column widths are constrained by min-width values
+- `drawCanvas()` is called on mouse-up to re-render the 3D view at the new size
+
+### Import Buttons
+
+- Both "Import Systems CSV" and "Import Chains CSV" sections use **stacked buttons** (column flex)
+- Two buttons per section: "Import Pasted" and "Load File" — each full width, stacked vertically
+
+### Stats Popup
+
+- After **Calculate Route** completes, a popup appears **above the Calculate button** (positioned absolutely in the left footer)
+- Popup shows: Systems, Route stops, Total dist., Jumps, B&B nodes, Time, Optimality, Self-check
+- Popup has an **✕ close button** in the top-right corner
+- Popup is **only shown after a new calculation** — not on page load
+- `clearAll()` also closes the popup
