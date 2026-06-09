@@ -217,7 +217,6 @@ function getCandidates(visited,progress,cc,endName){
   const out=[];
   for(const sys of systems){
     const name=sys.name;
-    if(name===endName)continue;
     if(canVisit(name,visited,progress,cc))out.push(name);
   }
   return out;
