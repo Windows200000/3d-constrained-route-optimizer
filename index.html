@@ -217,7 +217,7 @@ function canVisit(name,visited,progress,cc){
     for(let j=p+1;j<chain.items.length;j++){
       if(chain.items[j]===name){pendingInChain=true;break;}
     }
-    if(pendingInChain&&!nextInSome)break;
+    if(nextInSome) break;
   }
   if(nextInSome)return true;          // required next by at least one chain
   if(pendingInChain)return false;     // needed later in a chain, not yet its turn
