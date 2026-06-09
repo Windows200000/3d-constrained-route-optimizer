@@ -433,6 +433,7 @@ function calculateRoute(){
   const startName=document.getElementById('startSel').value;
   const endName=document.getElementById('endSel').value||null;
   const cc=chains.filter(c=>c.items.length>0);
+  cc.forEach(c=>{c.items=c.items.filter((v,i)=>i===0||v!==c.items[i-1]);});
   if(systems.length<2){setStatus('Need at least 2 systems.','err');return;}
   if(!startName){setStatus('Select a start system.','err');return;}
   setStatus('Running ILS + B&B\u2026','info');
