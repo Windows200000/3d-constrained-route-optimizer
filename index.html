@@ -123,7 +123,7 @@
     </div>
     <div class="panel-section">
       <h2>Import Systems CSV (Name,X,Y,Z)</h2>
-      <textarea id="csvInput" rows="3" placeholder="Paste CSV here&#10;Name,X,Y,Z&#10;Sol,0,0,0"></textarea>
+      <textarea id="csvInput" rows="2" placeholder="Name,X,Y,Z&#10;Sol,0,0,0"></textarea>
       <div class="row" style="margin-top:6px">
         <button class="btn" style="flex:1" onclick="importCSV()">Import</button>
         <label class="btn" style="flex:1;text-align:center;cursor:pointer">Load File <input type="file" accept=".csv" onchange="loadFile(event)" style="display:none"></label>
@@ -131,7 +131,7 @@
     </div>
     <div class="panel-section">
       <h2>Import Chains CSV</h2>
-      <textarea id="chainsInput" rows="3" placeholder="Chain,Position,Name,X,Y,Z&#10;1,1,Sol,0,0,0&#10;1,2,Colonia,5569.9,26.7,-9598.6"></textarea>
+      <textarea id="chainsInput" rows="2" placeholder="Chain,Position,Name,X,Y,Z&#10;1,1,Sol,0,0,0"></textarea>
       <div class="row" style="margin-top:6px">
         <button class="btn" style="flex:1" onclick="importChainsCSV()">Import</button>
         <label class="btn" style="flex:1;text-align:center;cursor:pointer">Load File <input type="file" accept=".csv" onchange="loadChainsFile(event)" style="display:none"></label>
