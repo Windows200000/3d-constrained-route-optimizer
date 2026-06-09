@@ -200,37 +200,16 @@ function advanceProgress(name,progress,cc){
   return np;
 }
 
-// Returns true if `name` still appears in any unfinished chain position
-// (i.e. it will need to be visited again after being visited once).
-function needsRevisit(name,progress,cc){
+// canVisit logic:
+//   Not yet visited → always allow immediately.
+//   Already visited → only allow if it is the immediate next item in at least one chain.
+function canVisit(name,visited,progress,cc){
+  if(!visited.has(name))return true;
   for(let ci=0;ci<cc.length;ci++){
     const p=progress[ci];
-    for(let j=p;j<cc[ci].items.length;j++){
-      if(cc[ci].items[j]===name)return true;
-    }
+    if(p<cc[ci].items.length&&cc[ci].items[p]===name)return true;
   }
   return false;
-}
-
-// Returns true if `name` may be visited next given current state:
-//   - name is the immediate next node in at least one chain → allow
-//   - name appears later in a chain but isn't next → block
-//   - name not pending in any chain and not yet visited → free, allow
-function canVisit(name,visited,progress,cc){
-  let pendingInChain=false;
-  let nextInSome=false;
-  for(let ci=0;ci<cc.length;ci++){
-    const chain=cc[ci];const p=progress[ci];
-    if(p>=chain.items.length)continue;
-    if(chain.items[p]===name){nextInSome=true;break;}
-    for(let j=p+1;j<chain.items.length;j++){
-      if(chain.items[j]===name){pendingInChain=true;break;}
-    }
-  }
-  if(nextInSome)return true;
-  if(pendingInChain)return false;
-  if(visited.has(name))return false;
-  return true;
 }
 
 // Collect all visitable system names given current state.
@@ -304,10 +283,8 @@ function buildGreedyRoute(startName,endName,cc){
     }
     if(!best)break;
     r.push(best);
-    const newProgress=advanceProgress(best,progress,cc);
-    // Only mark visited if this system is no longer needed by any chain
-    if(!needsRevisit(best,newProgress,cc))visited.add(best);
-    progress=newProgress;
+    visited.add(best);
+    progress=advanceProgress(best,progress,cc);
   }
   if(!chainsComplete(progress,cc))return null;
   if(endName&&endName!==startName)r.push(endName);
@@ -387,8 +364,7 @@ function iteratedLocalSearch(startName,endName,cc,timeLimit){
 // ─── Branch & Bound ───────────────────────────────────────────────────────────
 function branchAndBound(startName,endName,cc,timeLimit){
   const ilsTime=Math.floor(timeLimit*0.40);
-  const deadlineILS=Date.now()+ilsTime;
-  const deadlineBB=deadlineILS+(timeLimit-ilsTime);
+  const deadlineBB=Date.now()+timeLimit;
 
   const ilsResult=iteratedLocalSearch(startName,endName,cc,ilsTime);
   let bestRoute=ilsResult?ilsResult.route:buildGreedyRoute(startName,endName,cc);
@@ -399,8 +375,6 @@ function branchAndBound(startName,endName,cc,timeLimit){
 
   const initVis=new Set([startName]);
   const initProg=advanceProgress(startName,initProgress(cc),cc);
-  // Don't mark start as visited if chains still need it
-  if(needsRevisit(startName,initProg,cc))initVis.delete(startName);
   const stack=[{route:[startName],visited:initVis,progress:initProg,partialDist:0}];
 
   while(stack.length>0){
@@ -432,8 +406,7 @@ function branchAndBound(startName,endName,cc,timeLimit){
       const newPartial=partialDist+d;
       const newProgress=advanceProgress(name,progress,cc);
       const newVisited=new Set(visited);
-      // Only block re-visits if no chain still needs this system
-      if(!needsRevisit(name,newProgress,cc))newVisited.add(name);
+      newVisited.add(name);
       const remainingSys=systems.filter(s=>!newVisited.has(s.name)&&s.name!==endName);
       const lb=lowerBound(newPartial,sys,remainingSys,endSys);
       if(lb>=bestDist)continue;
