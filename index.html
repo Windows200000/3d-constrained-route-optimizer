@@ -229,12 +229,19 @@ function chainsComplete(progress,cc){
 }
 
 // Validate a complete route against chain ordering (used by 2-opt/or-opt).
+// For each chain: walk the route from start to end and cross off chain items
+// in order. A chain is satisfied only when all its items have been crossed off.
 function isValidRoute(r,cc){
   for(const chain of cc){
     if(!chain.items.length)continue;
-    let p=0;
-    for(const name of r){if(name===chain.items[p]){p++;if(p===chain.items.length)break;}}
-    if(p<chain.items.length)return false;
+    let p=0; // pointer into chain.items — the next item to cross off
+    for(const stop of r){
+      if(stop===chain.items[p]){
+        p++; // cross off this item
+        if(p===chain.items.length)break; // all items crossed off for this chain
+      }
+    }
+    if(p<chain.items.length)return false; // not all items were crossed off
   }
   return true;
 }
