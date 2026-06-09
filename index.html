@@ -191,7 +191,6 @@
     </div>
   </div>
 
-  <!-- rh-right: resizes the entire right column (canvas | right boundary) -->
   <div class="resize-handle" id="rh-right" title="Drag to resize"></div>
 
   <div class="right" id="rightCol">
@@ -202,7 +201,6 @@
       </div>
       <div class="right-systems-list" id="sysList"></div>
     </div>
-    <!-- rh-inner: resizes systems | chains within right col -->
     <div class="resize-handle" id="rh-inner" title="Drag to resize"></div>
     <div class="right-chains">
       <div class="right-header">
@@ -218,6 +216,26 @@
 </div>
 <script>
 let systems=[],chains=[],route=[],chainIdSeq=0;
+
+// ── Layout persistence ──
+const LAYOUT_KEY='route_opt_layout';
+function saveLayout(){
+  localStorage.setItem(LAYOUT_KEY,JSON.stringify({
+    leftW: document.getElementById('leftCol').offsetWidth,
+    rightW: document.getElementById('rightCol').offsetWidth,
+    rightSysW: document.getElementById('rightSystems').offsetWidth
+  }));
+}
+function loadLayout(){
+  try{
+    const raw=localStorage.getItem(LAYOUT_KEY);
+    if(!raw)return;
+    const l=JSON.parse(raw);
+    if(l.leftW)   document.getElementById('leftCol').style.width    = Math.max(140,Math.min(400,l.leftW))+'px';
+    if(l.rightW)  document.getElementById('rightCol').style.width   = Math.max(240,Math.min(700,l.rightW))+'px';
+    if(l.rightSysW) document.getElementById('rightSystems').style.width = Math.max(100,Math.min(300,l.rightSysW))+'px';
+  }catch(e){}
+}
 
 // ── Resize logic ──
 (function(){
@@ -239,6 +257,7 @@ let systems=[],chains=[],route=[],chainIdSeq=0;
       if(!dragging)return;
       dragging=false; handle.classList.remove('active');
       document.body.style.cursor=''; document.body.style.userSelect='';
+      saveLayout();
       drawCanvas();
     });
   }
@@ -306,49 +325,13 @@ function calculateRoute(){const startName=document.getElementById('startSel').va
 function renderRoute(elapsed,nodeCount,issues,optimality){const list=document.getElementById('routeList');const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value||startName;list.innerHTML='';let totalDist=0;route.forEach((name,i)=>{if(i>0){const a=systems.find(s=>s.name===route[i-1]);const b=systems.find(s=>s.name===name);const d=(a&&b)?dist(a,b):0;totalDist+=d;const arrow=document.createElement('div');arrow.className='route-step';arrow.innerHTML=`<span class="route-arrow">\u2192</span><span class="route-dist">${d.toFixed(1)}</span>`;list.appendChild(arrow);}const node=document.createElement('div');node.className='route-step';const isStart=name===startName&&i===0;const isEnd=name===endName&&i===route.length-1;const span=document.createElement('span');span.className='route-node'+(isStart?' start-node':isEnd?' end-node':'');span.textContent=`${i+1}. ${name}`;node.appendChild(span);list.appendChild(node);});document.getElementById('route-summary').textContent=route.length>0?`${route.length} stops \u00b7 ${totalDist.toFixed(1)} ly`:'';const checkOk=issues&&issues.length===0;const isOptimal=optimality==='optimal';if(route.length>0){document.getElementById('statsContent').innerHTML=`<div><span class="stat-label">Systems</span><span class="stat-val">${systems.length}</span></div>`+`<div><span class="stat-label">Route stops</span><span class="stat-val">${route.length}</span></div>`+`<div><span class="stat-label">Total dist.</span><span class="stat-val">${totalDist.toFixed(1)} ly</span></div>`+`<div><span class="stat-label">Jumps</span><span class="stat-val">${route.length-1}</span></div>`+`<div><span class="stat-label">B&amp;B nodes</span><span class="stat-val">${nodeCount.toLocaleString()}</span></div>`+`<div><span class="stat-label">Time</span><span class="stat-val">${elapsed}ms</span></div>`+`<div><span class="stat-label">Optimality</span><span class="stat-val ${isOptimal?'ok':''}">${isOptimal?'\u2605 Optimal':'\u23f1 Best/time'}</span></div>`+`<div><span class="stat-label">Self-check</span><span class="stat-val ${checkOk?'ok':'err'}">${checkOk?'\u2714 PASS':'\u2718 FAIL'}</span></div>`+(issues&&issues.length>0?issues.map(i=>`<div style="color:var(--danger);font-size:10px;clear:both">${i}</div>`).join(''):'');document.getElementById('statsBox').classList.add('has-results');}}
 
 // ── Canvas 3D ──
-//
-// camRot   - Euler angles (radians) for Y then X rotation
-// camZoom  - uniform scale multiplier
-// camPan   - 2D screen-space offset so the pivot appears at screen center + camPan
-// camTarget- 3D normalised pivot point that stays fixed on screen during rotation
-//            and zoom.  Panning shifts camPan (not camTarget).
-//
-// Projection:
-//   sx = W/2 + camPan.x + rx*scale
-//   sy = H/2 + camPan.y - ry2*scale
-//
-// Rotation orbit invariant:
-//   We store camTarget = the 3D point that the user has panned to the visual
-//   centre.  On each rotation delta we:
-//     1. Project camTarget with the OLD rotation -> screen pos (px_old, py_old)
-//     2. Apply the rotation delta to camRot
-//     3. Project camTarget with the NEW rotation -> (px_new, py_new)
-//     4. Compensate: camPan += (px_old - px_new, py_old - py_new)
-//   This keeps camTarget exactly stationary on screen.
-//
-// Panning:
-//   Move camPan by mouse delta AND update camTarget to the new 3D world-point
-//   that corresponds to (W/2 + camPan.x, H/2 + camPan.y) after the move.
-//   Since we don't have a depth for the screen centre we instead update
-//   camTarget by back-projecting the screen pan delta into 3D normalised coords.
-//   Simplified: we keep camTarget = (0,0,0) and accumulate the pan purely in
-//   camPan.  The orbit pivot is derived on the fly by back-projecting camPan.
-//
-// Simpler final approach used here:
-//   camTarget is kept synchronised with camPan: it is the 3D point whose
-//   projection (with the current rotation) lands at (W/2+camPan.x, H/2+camPan.y).
-//   We back-project camPan to get camTarget whenever panning ends, and we keep
-//   camPan consistent during rotation via step 4 above.
-
 let camRot={x:0.4,y:0.3},camZoom=1,camPan={x:0,y:0};
-// camTarget: the 3D normalised pivot (back-projected from camPan)
 let camTarget={x:0,y:0,z:0};
 let isDragging=false,isPanning=false,lastMouse={x:0,y:0},normalizedSystems=[];
 const canvas=document.getElementById('canvas');const ctx=canvas.getContext('2d');
 
 function normalize(){if(!systems.length){normalizedSystems=[];return;}const xs=systems.map(s=>s.x),ys=systems.map(s=>s.y),zs=systems.map(s=>s.z);const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),minZ=Math.min(...zs),maxZ=Math.max(...zs);const range=Math.max(maxX-minX,maxY-minY,maxZ-minZ,1);normalizedSystems=systems.map(s=>({name:s.name,nx:(s.x-(minX+maxX)/2)/range,ny:(s.y-(minY+maxY)/2)/range,nz:(s.z-(minZ+maxZ)/2)/range}));}
 
-// Project a normalised 3D point to screen coords given explicit rotation angles.
 function projectWith(nx,ny,nz,rotX,rotY){
   const cosY=Math.cos(rotY),sinY=Math.sin(rotY);
   const rx=nx*cosY-nz*sinY,rz=nx*sinY+nz*cosY;
@@ -361,24 +344,13 @@ function projectWith(nx,ny,nz,rotX,rotY){
 
 function project(nx,ny,nz){return projectWith(nx,ny,nz,camRot.x,camRot.y);}
 
-// Back-project a screen offset (dx,dy relative to canvas centre + camPan)
-// into the XY normalised plane (z=0 in rotated space), then un-rotate to
-// get the 3D normalised pivot that corresponds to camPan.
 function backProjectPan(){
   const scale=camZoom*Math.min(canvas.width,canvas.height)*0.38;
   if(scale===0)return;
-  // In rotated space the visible centre is at (rx=camPan.x/scale, ry2=-camPan.y/scale)
-  // We reconstruct nx,ny assuming nz_rot=0 (z component in rotated frame = 0)
-  // rx  = nx*cosY - nz*sinY  => nz = (nx*cosY - rx)/sinY  (use nz_rot=0 => nz=0 when sinY=0)
-  // ry2 = ny*cosX - nz_rot*sinX = ny*cosX
-  // From ry2: ny_rot = -camPan.y/scale => ny = ny_rot / cosX (if cosX != 0)
-  // From rx:  rx_rot =  camPan.x/scale
-  // Inverse of Y rotation: nx = rx*cosY + rz*sinY, nz = -rx*sinY + rz*cosY  (rz_rot=0)
   const rx_rot= camPan.x/scale;
   const ry_rot=-camPan.y/scale;
   const cosY=Math.cos(camRot.y),sinY=Math.sin(camRot.y);
-  const cosX=Math.cos(camRot.x),sinX=Math.sin(camRot.x);
-  // rz_rot assumed 0 for the pivot plane
+  const cosX=Math.cos(camRot.x);
   const nx=rx_rot*cosY;
   const ny=cosX!==0?ry_rot/cosX:0;
   const nz=-rx_rot*sinY;
@@ -433,15 +405,11 @@ function drawCanvas(){
   });
 }
 
-// Apply a rotation delta while keeping camTarget fixed on screen.
 function applyRotation(dRotX, dRotY){
-  // Screen pos of pivot BEFORE rotation
   const before=projectWith(camTarget.x,camTarget.y,camTarget.z,camRot.x,camRot.y);
   camRot.x+=dRotX;
   camRot.y+=dRotY;
-  // Screen pos of pivot AFTER rotation
   const after=projectWith(camTarget.x,camTarget.y,camTarget.z,camRot.x,camRot.y);
-  // Compensate pan so pivot stays at same screen position
   camPan.x+=before.sx-after.sx;
   camPan.y+=before.sy-after.sy;
 }
@@ -468,7 +436,6 @@ canvas.addEventListener('mouseleave',()=>{
 });
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
 
-// Scroll-wheel zoom anchored to cursor position.
 canvas.addEventListener('wheel',e=>{
   e.preventDefault();
   const rect=canvas.getBoundingClientRect();
@@ -492,7 +459,11 @@ window.addEventListener('resize',drawCanvas);
 function exportCSV(){if(!route.length){setStatus('Calculate a route first.','err');return;}const lines=['Name,X,Y,Z'];route.forEach(name=>{const s=systems.find(s=>s.name===name);if(s)lines.push(`${s.name},${s.x},${s.y},${s.z}`);});const blob=new Blob([lines.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='route.csv';a.click();setStatus('Route exported.','ok');}
 function clearAll(){if(!confirm('Clear all systems, chains, and route?'))return;systems=[];chains=[];route=[];renderSystems();renderChains();updateSelects();document.getElementById('routeList').innerHTML='';document.getElementById('route-summary').textContent='';clearStats();drawCanvas();localStorage.removeItem('route_opt_state');setStatus('Cleared.','info');}
 function setStatus(msg,type){const el=document.getElementById('status');el.textContent=msg;el.className='status-'+(type||'info');}
-loadState();drawCanvas();
+
+// Restore layout widths before first draw so canvas sizes correctly
+loadLayout();
+loadState();
+drawCanvas();
 </script>
 </body>
 </html>
