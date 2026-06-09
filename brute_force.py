@@ -15,8 +15,6 @@ with open(STAR_LIST_CSV, newline="", encoding="utf-8") as f:
         systems[row["Name"]] = (float(row["X"]), float(row["Y"]), float(row["Z"]))
 
 # ─── LOAD CHAINS ──────────────────────────────────────────────────────────────
-# chains.csv format: Chain,Position,Name,X,Y,Z
-# Each unique Chain number becomes one ordered chain list.
 _raw_chains = {}  # chain_id -> [(position, name)]
 with open(CHAINS_CSV, newline="", encoding="utf-8") as f:
     for row in csv.DictReader(f):
@@ -52,13 +50,16 @@ def init_progress():
     return [0] * len(chains)
 
 
-def can_visit(name, progress):
+def can_visit(name, visited, progress):
+    """Port of JS canVisit: unvisited nodes are always allowed;
+    already-visited nodes are only allowed if a chain currently demands them."""
+    if name not in visited:
+        return True
     for ci, chain in enumerate(chains):
         p = progress[ci]
-        for j in range(len(chain)):
-            if chain[j] == name and j > p:
-                return False
-    return True
+        if p < len(chain) and chain[p] == name:
+            return True
+    return False
 
 
 def advance(name, progress):
@@ -71,6 +72,12 @@ def advance(name, progress):
 
 def all_done(progress):
     return all(progress[ci] >= len(chains[ci]) for ci in range(len(chains)))
+
+
+def get_candidates(current_visited, progress):
+    """Return all systems (including revisits) that can be visited next.
+    Mirrors JS getCandidates + canVisit exactly."""
+    return [name for name in names_list if can_visit(name, current_visited, progress)]
 
 
 def fmt_time(seconds):
@@ -89,36 +96,25 @@ def fmt_time(seconds):
 
 # ─── GREEDY SEED ──────────────────────────────────────────────────────────────
 def greedy_seed():
-    """Nearest-neighbour greedy route respecting chain ordering (best-effort)."""
+    """Nearest-neighbour greedy using get_candidates (supports revisits)."""
     visited = {START}
     route = [START]
     progress = advance(START, init_progress())
-    remaining = [s for s in names_list if s != START and s != END]
     current = START
-    while remaining:
-        # find nearest unvisited that is allowed by constraints
-        candidates = [s for s in remaining if can_visit(s, progress)]
+    while True:
+        candidates = [c for c in get_candidates(visited, progress) if c != END]
         if not candidates:
-            candidates = remaining  # fall back — may violate; just for seeding
+            break
         nxt = min(candidates, key=lambda s: D[idx[current]][idx[s]])
         route.append(nxt)
         visited.add(nxt)
-        remaining.remove(nxt)
         progress = advance(nxt, progress)
         current = nxt
     route.append(END)
     return route
 
 
-# ─── ETA / PROGRESS ───────────────────────────────────────────────────────────
-middle_pool = [s for s in names_list if s != START and s != END] + [START]
-TOTAL_TOP = len(middle_pool)
-
-progress_tracker = {
-    "top_done": 0,
-    "branch_times": [],
-}
-
+# ─── GLOBALS ──────────────────────────────────────────────────────────────────
 approx_route = greedy_seed()
 
 best = {
@@ -133,12 +129,26 @@ valid_found = [0]
 start_time = time.time()
 last_report = [start_time]
 
+# Top-level pool: all systems except END (START included — it can be revisited)
+middle_pool = [s for s in names_list if s != END]
+TOTAL_TOP = len(middle_pool)
+
+progress_tracker = {
+    "top_done": 0,
+    "branch_times": [],
+}
+
 
 # ─── SEARCH ───────────────────────────────────────────────────────────────────
-def branch_and_bound(partial_route, partial_dist, remaining, progress, depth):
+def branch_and_bound(partial_route, partial_dist, visited, progress):
     global checked, pruned_dist, pruned_constraint
 
-    if not remaining:
+    candidates = get_candidates(visited, progress)
+    # Remove END from mid-route candidates — it's only appended at the leaf
+    candidates = [c for c in candidates if c != END]
+
+    if not candidates:
+        # Leaf: try to close to END
         final_dist = partial_dist + D[idx[partial_route[-1]]][idx[END]]
         checked += 1
         final_progress = advance(END, progress)
@@ -153,31 +163,21 @@ def branch_and_bound(partial_route, partial_dist, remaining, progress, depth):
             print(f" ★ New best: {final_dist:.4f} ly | checked {checked:,} | "
                   f"valid {valid_found[0]:,} | elapsed {fmt_time(elapsed)}")
             print(f"   Route: {' -> '.join(best['route'])}")
-
         now = time.time()
         if now - last_report[0] > 15:
             last_report[0] = now
             _print_progress()
         return
 
-    for i, name in enumerate(remaining):
-        if not can_visit(name, progress):
-            pruned_constraint += 1
-            continue
+    for name in candidates:
         step_dist = D[idx[partial_route[-1]]][idx[name]]
         new_dist = partial_dist + step_dist
         if new_dist >= best["dist"]:
             pruned_dist += 1
             continue
-        new_remaining = remaining[:i] + remaining[i + 1:]
+        new_visited = visited | {name}
         new_progress = advance(name, progress)
-        branch_and_bound(
-            partial_route + [name],
-            new_dist,
-            new_remaining,
-            new_progress,
-            depth + 1,
-        )
+        branch_and_bound(partial_route + [name], new_dist, new_visited, new_progress)
 
 
 def _print_progress():
@@ -211,9 +211,10 @@ print("Progress reported every 15s. New bests printed immediately.")
 print("=" * 65)
 
 init_prog = advance(START, init_progress())
+init_visited = {START}
 
 for top_i, first_sys in enumerate(middle_pool):
-    if not can_visit(first_sys, init_prog):
+    if not can_visit(first_sys, init_visited, init_prog):
         progress_tracker["top_done"] += 1
         continue
     step_dist = D[idx[START]][idx[first_sys]]
@@ -222,9 +223,9 @@ for top_i, first_sys in enumerate(middle_pool):
         continue
 
     t0 = time.time()
-    remaining_after_first = [s for j, s in enumerate(middle_pool) if j != top_i]
+    new_visited = init_visited | {first_sys}
     new_prog = advance(first_sys, init_prog)
-    branch_and_bound([START, first_sys], step_dist, remaining_after_first, new_prog, depth=1)
+    branch_and_bound([START, first_sys], step_dist, new_visited, new_prog)
 
     branch_elapsed = time.time() - t0
     progress_tracker["top_done"] += 1
