@@ -94,3 +94,21 @@ The specific algorithm used is an implementation detail — what matters is the 
 - Popup has an **✕ close button** in the top-right corner
 - Popup is **only shown after a new calculation** — not on page load
 - `clearAll()` also closes the popup
+
+---
+
+## Solver Timeout
+
+- A **Timeout** text field (in seconds) is shown in the left footer, directly above the Calculate Route button
+- Default value: **5 seconds**
+- The value is persisted in `localStorage` under key `route_opt_timeout` and restored on page load
+- Invalid or non-positive values fall back to 5 seconds silently
+- The timeout is passed as milliseconds to `branchAndBound()`; the 40/60 ILS/B&B split applies to the full budget
+- The status bar shows the active timeout when calculation starts: `Running ILS + B&B… (Xs timeout)`
+
+### Optimality States
+
+| State | Label | Trigger |
+|-------|-------|---------|
+| `optimal` | ⭐ Optimal | B&B exhausted the full search tree before the deadline |
+| `best-in-time` | ⏱ Best/time | B&B was cut off by the deadline (`timedOut = true`) |
