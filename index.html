@@ -30,7 +30,6 @@
 
   /* ── Left column ── */
   .left { width: var(--left-w); min-width: 140px; max-width: 400px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; position: relative; }
-  /* scrollable body of left col */
   .left-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
   .panel-section { border-bottom: 1px solid var(--border); padding: 10px 12px; }
   .panel-section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px; }
@@ -113,7 +112,7 @@
   .add-chain-btn { width: 100%; background: none; border: 1px dashed var(--border); color: var(--text-muted); padding: 6px; border-radius: 4px; cursor: pointer; font-size: 11px; }
   .add-chain-btn:hover { border-color: var(--chain); color: var(--chain); }
 
-  /* ── Stats box (always visible, scrolls with left-scroll) ── */
+  /* ── Stats box ── */
   .stats-box {
     border-top: 1px solid var(--border);
     padding: 8px 12px;
@@ -138,7 +137,6 @@
     padding: 8px 12px;
     background: var(--surface);
     border-top: 1px solid var(--border);
-    /* floats over scrollable content via stacking */
     position: sticky;
     bottom: 0;
     z-index: 20;
@@ -160,7 +158,6 @@
 <div class="main" id="mainLayout">
   <!-- LEFT -->
   <div class="left" id="leftCol">
-    <!-- scrollable area -->
     <div class="left-scroll">
       <div class="panel-section">
         <h2>Route Endpoints</h2>
@@ -193,7 +190,6 @@
           <label class="btn" style="flex:1;text-align:center;cursor:pointer">Load File <input type="file" accept=".csv" onchange="loadChainsFile(event)" style="display:none"></label>
         </div>
       </div>
-      <!-- Stats box: always visible, empty until first calculate -->
       <div class="stats-box" id="statsBox">
         <div class="stats-box-header">
           <span class="stats-box-title">Result</span>
@@ -201,14 +197,12 @@
         </div>
         <div id="statsContent"><span class="stat-empty">No route calculated yet.</span></div>
       </div>
-    </div><!-- end left-scroll -->
-    <!-- Sticky calculate button floats over content when scrolled -->
+    </div>
     <div class="left-footer">
       <button class="btn btn-primary" style="width:100%;padding:8px" onclick="calculateRoute()">&#x25B6; CALCULATE ROUTE</button>
     </div>
   </div>
 
-  <!-- RESIZE HANDLE: left | center -->
   <div class="resize-handle" id="rh-left" title="Drag to resize"></div>
 
   <!-- CENTER -->
@@ -224,13 +218,10 @@
     </div>
   </div>
 
-  <!-- RESIZE HANDLE: center | right-systems
-       Dragging this resizes rightSystems width; center (flex:1) absorbs the slack -->
   <div class="resize-handle" id="rh-right" title="Drag to resize"></div>
 
-  <!-- RIGHT: Systems + Chains side by side -->
+  <!-- RIGHT -->
   <div class="right" id="rightCol">
-    <!-- Systems sub-panel -->
     <div class="right-systems" id="rightSystems">
       <div class="right-systems-header">
         <h2>Systems</h2>
@@ -238,11 +229,7 @@
       </div>
       <div class="right-systems-list" id="sysList"></div>
     </div>
-
-    <!-- RESIZE HANDLE: systems | chains (within right col) -->
     <div class="resize-handle" id="rh-inner" title="Drag to resize"></div>
-
-    <!-- Chains sub-panel -->
     <div class="right-chains">
       <div class="right-header">
         <h2>Chains</h2>
@@ -284,34 +271,28 @@ let systems=[],chains=[],route=[],chainIdSeq=0;
       drawCanvas();
     });
   }
-
-  // Left col | center (left grows/shrinks, center is flex:1 and absorbs)
   makeColResizer(
     document.getElementById('rh-left'),
     ()=>document.getElementById('leftCol').offsetWidth,
     w=>{ document.getElementById('leftCol').style.width=w+'px'; },
     ()=>document.getElementById('centerCol').offsetWidth,
-    w=>{ /* center flex:1 auto-adjusts */ },
+    w=>{ },
     140, 200
   );
-
-  // center | right-systems: dragging grows/shrinks rightSystems; center (flex:1) absorbs
   makeColResizer(
     document.getElementById('rh-right'),
     ()=>document.getElementById('centerCol').offsetWidth,
-    w=>{ /* center is flex:1; shrinks automatically as rightSystems grows */ },
+    w=>{ },
     ()=>document.getElementById('rightSystems').offsetWidth,
     w=>{ document.getElementById('rightSystems').style.width=w+'px'; },
     200, 120
   );
-
-  // inner right: systems | chains
   makeColResizer(
     document.getElementById('rh-inner'),
     ()=>document.getElementById('rightSystems').offsetWidth,
     w=>{ document.getElementById('rightSystems').style.width=w+'px'; },
     ()=>document.getElementById('rightCol').offsetWidth - document.getElementById('rightSystems').offsetWidth - 5,
-    w=>{ /* chains is flex:1 */ },
+    w=>{ },
     100, 120
   );
 })();
@@ -330,346 +311,70 @@ function removeChain(id){chains=chains.filter(c=>c.id!==id);renderChains();saveS
 function removeChainItem(chainId,idx){const c=chains.find(c=>c.id===chainId);if(c){c.items.splice(idx,1);renderChains();saveState();}}
 function renderChains(){const panel=document.getElementById('chainsPanel');panel.innerHTML='';if(chains.length===0){panel.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:6px;font-style:italic">No chains yet.<br>Click "+ New Chain" below.</div>';return;}chains.forEach((chain,ci)=>{const block=document.createElement('div');block.className='chain-block';const header=document.createElement('div');header.className='chain-header';header.innerHTML=`<span>Chain ${ci+1}</span><button class="btn btn-sm btn-danger" onclick="removeChain(${chain.id})">&#x2715;</button>`;const zone=document.createElement('div');zone.className='chain-drop-zone';zone.dataset.chainId=chain.id;if(chain.items.length===0){zone.innerHTML='<span class="chain-empty">Drop systems here</span>';}else{chain.items.forEach((name,idx)=>{if(idx>0){const arr=document.createElement('span');arr.textContent='\u2192';arr.style.cssText='color:var(--text-muted);font-size:10px;align-self:center';zone.appendChild(arr);}const item=document.createElement('div');item.className='chain-item';item.draggable=true;item.dataset.chainId=chain.id;item.dataset.idx=idx;item.innerHTML=`${name}<span class="remove-item" onclick="removeChainItem(${chain.id},${idx})">&#x2715;</span>`;item.addEventListener('dragstart',e=>{e.dataTransfer.setData('chain-move',JSON.stringify({chainId:chain.id,idx}));e.dataTransfer.effectAllowed='move';});zone.appendChild(item);});}zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over');});zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-over');const chainId=parseInt(zone.dataset.chainId);const c=chains.find(c=>c.id===chainId);if(!c)return;const moveData=e.dataTransfer.getData('chain-move');if(moveData){const{chainId:srcId,idx:srcIdx}=JSON.parse(moveData);const src=chains.find(c=>c.id===srcId);if(!src)return;const name=src.items[srcIdx];src.items.splice(srcIdx,1);c.items.push(name);renderChains();saveState();return;}const name=e.dataTransfer.getData('text/plain');if(!name||!systems.find(s=>s.name===name))return;c.items.push(name);renderChains();saveState();});block.appendChild(header);block.appendChild(zone);panel.appendChild(block);});}
 
-// ── Stats box helpers ──
-function clearStats(){
-  document.getElementById('statsContent').innerHTML='<span class="stat-empty">No route calculated yet.</span>';
-  document.getElementById('statsBox').classList.remove('has-results');
-}
-
-// --- Export chains as CSV ---
+function clearStats(){document.getElementById('statsContent').innerHTML='<span class="stat-empty">No route calculated yet.</span>';document.getElementById('statsBox').classList.remove('has-results');}
 function exportChainsCSV(){const cc=chains.filter(c=>c.items.length>0);if(!cc.length){setStatus('No chains to export.','err');return;}const lines=['Chain,Position,Name,X,Y,Z'];cc.forEach((chain,ci)=>{chain.items.forEach((name,pos)=>{const s=systems.find(s=>s.name===name);const x=s?s.x:'',y=s?s.y:'',z=s?s.z:'';lines.push(`${ci+1},${pos+1},${name},${x},${y},${z}`);});});const blob=new Blob([lines.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chains.csv';a.click();setStatus(`Exported ${cc.length} chain(s) as CSV.`,'ok');}
-
-// --- Import chains as CSV ---
 function loadChainsFile(evt){const file=evt.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{parseChainsCSVText(e.target.result);evt.target.value='';};reader.readAsText(file);}
 function importChainsCSV(){const text=document.getElementById('chainsInput').value.trim();if(!text){setStatus('Paste chains CSV first.','err');return;}parseChainsCSVText(text);}
-function parseChainsCSVText(text){
-  const lines=text.trim().split(/\r?\n/);
-  let start=0;
-  const firstCols=lines[0].split(',');
-  if(firstCols[0].toLowerCase().includes('chain')||isNaN(parseInt(firstCols[0])))start=1;
-  let sysAdded=0,chCount=0;
-  const chainMap={};
-  for(let i=start;i<lines.length;i++){
-    const parts=lines[i].split(',').map(s=>s.trim().replace(/^"|"$/g,''));
-    if(!parts[0])continue;
-    const chainIdx=parseInt(parts[0]);
-    const pos=parseInt(parts[1]);
-    const name=parts[2];
-    const x=parseFloat(parts[3])||0;
-    const y=parseFloat(parts[4])||0;
-    const z=parseFloat(parts[5])||0;
-    if(!name||isNaN(chainIdx)||isNaN(pos))continue;
-    if(!systems.find(s=>s.name.toLowerCase()===name.toLowerCase())){systems.push({name,x,y,z});sysAdded++;}
-    if(!chainMap[chainIdx]){chainMap[chainIdx]=[];chCount++;}
-    chainMap[chainIdx].push({pos,name});
-  }
-  if(!chCount){setStatus('No valid chain data found.','err');return;}
-  chains=Object.values(chainMap).map(entries=>({id:chainIdSeq++,items:entries.sort((a,b)=>a.pos-b.pos).map(e=>e.name)}));
-  renderSystems();renderChains();updateSelects();saveState();
-  setStatus(`Imported ${chCount} chain(s), ${sysAdded} new system(s).`,'ok');
-  document.getElementById('chainsInput').value='';
-}
+function parseChainsCSVText(text){const lines=text.trim().split(/\r?\n/);let start=0;const firstCols=lines[0].split(',');if(firstCols[0].toLowerCase().includes('chain')||isNaN(parseInt(firstCols[0])))start=1;let sysAdded=0,chCount=0;const chainMap={};for(let i=start;i<lines.length;i++){const parts=lines[i].split(',').map(s=>s.trim().replace(/^"|"$/g,''));if(!parts[0])continue;const chainIdx=parseInt(parts[0]);const pos=parseInt(parts[1]);const name=parts[2];const x=parseFloat(parts[3])||0;const y=parseFloat(parts[4])||0;const z=parseFloat(parts[5])||0;if(!name||isNaN(chainIdx)||isNaN(pos))continue;if(!systems.find(s=>s.name.toLowerCase()===name.toLowerCase())){systems.push({name,x,y,z});sysAdded++;}if(!chainMap[chainIdx]){chainMap[chainIdx]=[];chCount++;}chainMap[chainIdx].push({pos,name});}if(!chCount){setStatus('No valid chain data found.','err');return;}chains=Object.values(chainMap).map(entries=>({id:chainIdSeq++,items:entries.sort((a,b)=>a.pos-b.pos).map(e=>e.name)}));renderSystems();renderChains();updateSelects();saveState();setStatus(`Imported ${chCount} chain(s), ${sysAdded} new system(s).`,'ok');document.getElementById('chainsInput').value='';}
 
-// --- Core geometry ---
 function dist(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2);}
 function routeDist(names){let d=0;for(let i=0;i<names.length-1;i++){const a=systems.find(s=>s.name===names[i]);const b=systems.find(s=>s.name===names[i+1]);if(a&&b)d+=dist(a,b);}return d;}
-
-// --- Chain constraint helpers ---
 function initProgress(cc){return cc.map(()=>0);}
-function advanceProgress(name,progress,cc){
-  const np=[...progress];
-  for(let ci=0;ci<cc.length;ci++){
-    while(np[ci]<cc[ci].items.length&&cc[ci].items[np[ci]]===name)np[ci]++;
-  }
-  return np;
-}
-function canVisit(name,visited,progress,cc){
-  if(!visited.has(name))return true;
-  for(let ci=0;ci<cc.length;ci++){
-    const p=progress[ci];
-    if(p<cc[ci].items.length&&cc[ci].items[p]===name)return true;
-  }
-  return false;
-}
-function getCandidates(visited,progress,cc,endName){
-  const out=[];
-  for(const sys of systems){
-    const name=sys.name;
-    if(canVisit(name,visited,progress,cc))out.push(name);
-  }
-  return out;
-}
-function chainsComplete(progress,cc){
-  for(let ci=0;ci<cc.length;ci++)if(progress[ci]<cc[ci].items.length)return false;
-  return true;
-}
-function isValidRoute(r,cc){
-  for(const chain of cc){
-    if(!chain.items.length)continue;
-    let p=0;
-    for(const name of r){if(name===chain.items[p]){p++;if(p===chain.items.length)break;}}
-    if(p<chain.items.length){
-      console.log(`Chain: \n${JSON.stringify(chain)}\nnot valid for:\n${r}`);
-      return false;
-    }
-  }
-  return true;
-}
+function advanceProgress(name,progress,cc){const np=[...progress];for(let ci=0;ci<cc.length;ci++){while(np[ci]<cc[ci].items.length&&cc[ci].items[np[ci]]===name)np[ci]++;}return np;}
+function canVisit(name,visited,progress,cc){if(!visited.has(name))return true;for(let ci=0;ci<cc.length;ci++){const p=progress[ci];if(p<cc[ci].items.length&&cc[ci].items[p]===name)return true;}return false;}
+function getCandidates(visited,progress,cc,endName){const out=[];for(const sys of systems){const name=sys.name;if(canVisit(name,visited,progress,cc))out.push(name);}return out;}
+function chainsComplete(progress,cc){for(let ci=0;ci<cc.length;ci++)if(progress[ci]<cc[ci].items.length)return false;return true;}
+function isValidRoute(r,cc){for(const chain of cc){if(!chain.items.length)continue;let p=0;for(const name of r){if(name===chain.items[p]){p++;if(p===chain.items.length)break;}}if(p<chain.items.length)return false;}return true;}
+function mstCost(nodes){if(nodes.length<2)return 0;const n=nodes.length;const inMST=new Uint8Array(n);const minEdge=new Float64Array(n).fill(Infinity);minEdge[0]=0;let total=0;for(let iter=0;iter<n;iter++){let u=-1;for(let i=0;i<n;i++)if(!inMST[i]&&(u===-1||minEdge[i]<minEdge[u]))u=i;inMST[u]=1;total+=minEdge[u];for(let v=0;v<n;v++){if(inMST[v])continue;const d=dist(nodes[u],nodes[v]);if(d<minEdge[v])minEdge[v]=d;}}return total;}
+function lowerBound(partialDist,currentSys,unvisitedSystems,endSys){if(unvisitedSystems.length===0)return partialDist+(endSys?dist(currentSys,endSys):0);let minOut=Infinity;for(const s of unvisitedSystems){const d=dist(currentSys,s);if(d<minOut)minOut=d;}const mst=mstCost(unvisitedSystems);let minIn=0;if(endSys){minIn=Infinity;for(const s of unvisitedSystems){const d=dist(s,endSys);if(d<minIn)minIn=d;}}return partialDist+minOut+mst+minIn;}
+function buildGreedyRoute(startName,endName,cc){const visited=new Set([startName]);let progress=advanceProgress(startName,initProgress(cc),cc);const r=[startName];while(true){const candidates=getCandidates(visited,progress,cc,endName);if(candidates.length===0)break;const cur=systems.find(s=>s.name===r[r.length-1]);let best=null,bestD=Infinity;for(const name of candidates){const s=systems.find(s=>s.name===name);const d=dist(cur,s);if(d<bestD){bestD=d;best=name;}}if(!best)break;r.push(best);visited.add(best);progress=advanceProgress(best,progress,cc);}if(!chainsComplete(progress,cc))return null;if(endName&&endName!==startName&&r[r.length-1]!==endName)r.push(endName);return r;}
+function twoOpt(r,cc,deadline){const n=r.length;const fixHead=1,fixTail=n-2;let improved=true;while(improved&&Date.now()<deadline){improved=false;for(let i=fixHead;i<=fixTail-1&&Date.now()<deadline;i++){for(let j=i+1;j<=fixTail;j++){const candidate=[...r.slice(0,i),...r.slice(i,j+1).reverse(),...r.slice(j+1)];if(!isValidRoute(candidate,cc))continue;if(routeDist(candidate)<routeDist(r)-1e-9){r=candidate;improved=true;break;}}if(improved)break;}}return r;}
+function orOpt(r,cc,deadline){const n=r.length;let improved=true;while(improved&&Date.now()<deadline){improved=false;const baseD=routeDist(r);outer:for(let i=1;i<n-1&&Date.now()<deadline;i++){for(let j=1;j<n-1;j++){if(j===i)continue;const candidate=r.filter((_,idx)=>idx!==i);candidate.splice(j,0,r[i]);if(!isValidRoute(candidate,cc))continue;if(routeDist(candidate)<baseD-1e-9){r=candidate;improved=true;break outer;}}}}return r;}
+function doubleBridge(r,cc){const n=r.length;if(n<8)return r;const interior=r.slice(1,n-1);const len=interior.length;if(len<4)return r;const a=1+Math.floor(Math.random()*Math.floor(len/4));const b=1+Math.floor(len/4)+Math.floor(Math.random()*Math.floor(len/4));const c=1+Math.floor(len/2)+Math.floor(Math.random()*Math.floor(len/4));const candidate=[...r.slice(0,a),...r.slice(c,n-1),...r.slice(b,c),...r.slice(a,b),...r.slice(n-1)];return isValidRoute(candidate,cc)?candidate:r;}
+function iteratedLocalSearch(startName,endName,cc,timeLimit){const deadline=Date.now()+timeLimit;let best=buildGreedyRoute(startName,endName,cc);if(!best)return null;best=twoOpt(best,cc,deadline);best=orOpt(best,cc,deadline);let bestD=routeDist(best);while(Date.now()<deadline){let candidate=doubleBridge(best,cc);candidate=twoOpt(candidate,cc,deadline);candidate=orOpt(candidate,cc,deadline);const d=routeDist(candidate);if(d<bestD-1e-9){bestD=d;best=candidate;}}return{route:best,dist:bestD};}
+function branchAndBound(startName,endName,cc,timeLimit){const ilsTime=Math.floor(timeLimit*0.40);const deadlineBB=Date.now()+timeLimit;const ilsResult=iteratedLocalSearch(startName,endName,cc,ilsTime);let bestRoute=ilsResult?ilsResult.route:buildGreedyRoute(startName,endName,cc);let bestDist=bestRoute?routeDist(bestRoute):Infinity;const endSys=endName?systems.find(s=>s.name===endName):null;let timedOut=false,nodesChecked=0;const initVis=new Set([startName]);const initProg=advanceProgress(startName,initProgress(cc),cc);const stack=[{route:[startName],visited:initVis,progress:initProg,partialDist:0}];while(stack.length>0){if(Date.now()>=deadlineBB){timedOut=true;break;}const{route,visited,progress,partialDist}=stack.pop();nodesChecked++;const candidates=getCandidates(visited,progress,cc,endName);if(candidates.length===0){if(!chainsComplete(progress,cc))continue;const curSys=systems.find(s=>s.name===route[route.length-1]);const fullDist=partialDist+(endSys&&route[route.length-1]!==endName?dist(curSys,endSys):0);if(fullDist<bestDist){bestDist=fullDist;bestRoute=(endName&&endName!==startName&&route[route.length-1]!==endName)?[...route,endName]:[...route];}continue;}const curSys=systems.find(s=>s.name===route[route.length-1]);const expanded=candidates.map(name=>{const s=systems.find(s=>s.name===name);return{name,sys:s,d:dist(curSys,s)};}).sort((a,b)=>a.d-b.d);for(let i=expanded.length-1;i>=0;i--){const{name,sys,d}=expanded[i];const newPartial=partialDist+d;const newProgress=advanceProgress(name,progress,cc);const newVisited=new Set(visited);newVisited.add(name);const remainingSys=systems.filter(s=>!newVisited.has(s.name)&&s.name!==endName);const lb=lowerBound(newPartial,sys,remainingSys,endSys);if(lb>=bestDist)continue;stack.push({route:[...route,name],visited:newVisited,progress:newProgress,partialDist:newPartial});}}return{route:bestRoute,dist:bestDist,timedOut,nodesChecked};}
+function selfCheck(r,cc,startName,endName){const issues=[];if(!isValidRoute(r,cc))issues.push('Chain order constraints violated!');if(startName&&r[0]!==startName)issues.push(`Does not start at "${startName}"`);if(endName&&endName!==startName&&r[r.length-1]!==endName)issues.push(`Does not end at "${endName}"`);const inRoute=new Set(r);for(const sys of systems){if(!inRoute.has(sys.name))issues.push(`"${sys.name}" missing from route`);}return issues;}
+function calculateRoute(){const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value||null;const cc=chains.filter(c=>c.items.length>0);cc.forEach(c=>{c.items=c.items.filter((v,i)=>i===0||v!==c.items[i-1]);});if(systems.length<2){setStatus('Need at least 2 systems.','err');return;}if(!startName){setStatus('Select a start system.','err');return;}setStatus('Running ILS + B&B\u2026','info');const t0=Date.now();setTimeout(()=>{try{const TIME_LIMIT=2500;const{route:best,dist:bestDist,timedOut,nodesChecked}=branchAndBound(startName,endName,cc,TIME_LIMIT);if(!best){setStatus('No valid route found \u2014 check chain constraints.','err');return;}const elapsed=Date.now()-t0;route=best;const issues=selfCheck(route,cc,startName,endName);const optimality=timedOut?'best-in-time':'optimal';renderRoute(elapsed,nodesChecked,issues,optimality);drawCanvas();saveState();if(issues.length>0)setStatus(`\u26a0 ${issues[0]}`,'warn');else if(timedOut)setStatus(`\u23f1 ILS+B&B timeout \u2014 best found: ${bestDist.toFixed(1)} ly \u00b7 ${nodesChecked} nodes \u00b7 ${elapsed}ms`,'warn');else setStatus(`\u2714 Optimal: ${bestDist.toFixed(1)} ly \u00b7 ${nodesChecked} nodes \u00b7 ${elapsed}ms`,'ok');}catch(e){setStatus('Error: '+e.message,'err');console.error(e);}},20);}
+function renderRoute(elapsed,nodeCount,issues,optimality){const list=document.getElementById('routeList');const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value||startName;list.innerHTML='';let totalDist=0;route.forEach((name,i)=>{if(i>0){const a=systems.find(s=>s.name===route[i-1]);const b=systems.find(s=>s.name===name);const d=(a&&b)?dist(a,b):0;totalDist+=d;const arrow=document.createElement('div');arrow.className='route-step';arrow.innerHTML=`<span class="route-arrow">\u2192</span><span class="route-dist">${d.toFixed(1)}</span>`;list.appendChild(arrow);}const node=document.createElement('div');node.className='route-step';const isStart=name===startName&&i===0;const isEnd=name===endName&&i===route.length-1;const span=document.createElement('span');span.className='route-node'+(isStart?' start-node':isEnd?' end-node':'');span.textContent=`${i+1}. ${name}`;node.appendChild(span);list.appendChild(node);});document.getElementById('route-summary').textContent=route.length>0?`${route.length} stops \u00b7 ${totalDist.toFixed(1)} ly`:'';const checkOk=issues&&issues.length===0;const isOptimal=optimality==='optimal';if(route.length>0){document.getElementById('statsContent').innerHTML=`<div><span class="stat-label">Systems</span><span class="stat-val">${systems.length}</span></div>`+`<div><span class="stat-label">Route stops</span><span class="stat-val">${route.length}</span></div>`+`<div><span class="stat-label">Total dist.</span><span class="stat-val">${totalDist.toFixed(1)} ly</span></div>`+`<div><span class="stat-label">Jumps</span><span class="stat-val">${route.length-1}</span></div>`+`<div><span class="stat-label">B&amp;B nodes</span><span class="stat-val">${nodeCount.toLocaleString()}</span></div>`+`<div><span class="stat-label">Time</span><span class="stat-val">${elapsed}ms</span></div>`+`<div><span class="stat-label">Optimality</span><span class="stat-val ${isOptimal?'ok':''}">${isOptimal?'\u2605 Optimal':'\u23f1 Best/time'}</span></div>`+`<div><span class="stat-label">Self-check</span><span class="stat-val ${checkOk?'ok':'err'}">${checkOk?'\u2714 PASS':'\u2718 FAIL'}</span></div>`+(issues&&issues.length>0?issues.map(i=>`<div style="color:var(--danger);font-size:10px;clear:both">${i}</div>`).join(''):'');document.getElementById('statsBox').classList.add('has-results');}}
 
-// --- Prim's MST lower bound ---
-function mstCost(nodes){
-  if(nodes.length<2)return 0;
-  const n=nodes.length;
-  const inMST=new Uint8Array(n);
-  const minEdge=new Float64Array(n).fill(Infinity);
-  minEdge[0]=0;let total=0;
-  for(let iter=0;iter<n;iter++){
-    let u=-1;
-    for(let i=0;i<n;i++)if(!inMST[i]&&(u===-1||minEdge[i]<minEdge[u]))u=i;
-    inMST[u]=1;total+=minEdge[u];
-    for(let v=0;v<n;v++){if(inMST[v])continue;const d=dist(nodes[u],nodes[v]);if(d<minEdge[v])minEdge[v]=d;}
-  }
-  return total;
-}
-function lowerBound(partialDist,currentSys,unvisitedSystems,endSys){
-  if(unvisitedSystems.length===0)return partialDist+(endSys?dist(currentSys,endSys):0);
-  let minOut=Infinity;
-  for(const s of unvisitedSystems){const d=dist(currentSys,s);if(d<minOut)minOut=d;}
-  const mst=mstCost(unvisitedSystems);
-  let minIn=0;
-  if(endSys){minIn=Infinity;for(const s of unvisitedSystems){const d=dist(s,endSys);if(d<minIn)minIn=d;}}
-  return partialDist+minOut+mst+minIn;
-}
+// ── Canvas 3D ──
+//
+// State:
+//   camRot  - Euler angles (radians)
+//   camZoom - uniform scale multiplier
+//   camPan  - 2D screen-space offset (pixels) that shifts the entire scene
+//
+// Key invariant for zoom & rotate:
+//   When zooming with the scroll wheel the world-point currently under the
+//   cursor must not move on screen.  Internally the projection formula is:
+//
+//     sx = W/2 + camPan.x + rx * scale
+//     sy = H/2 + camPan.y - ry * scale
+//
+//   where (rx, ry) are the rotated normalised coords and scale = camZoom * k.
+//   Before zoom:  mouse_sx = W/2 + pan.x + rx * scale_old
+//   After zoom:   mouse_sx = W/2 + pan.x_new + rx * scale_new
+//   => pan.x_new = pan.x + rx * (scale_old - scale_new)
+//   But rx = (mouse_sx - W/2 - pan.x) / scale_old, so:
+//   => pan.x_new = pan.x + (mouse_sx - W/2 - pan.x) * (1 - scale_new/scale_old)
+//              = mouse_sx - W/2 - (mouse_sx - W/2 - pan.x) * (scale_new/scale_old)
+//   Simplified:
+//   => pan_new = pan + (cursor_from_canvas_center - pan) * (1 - zoomFactor)
+//
+// For rotation we want to orbit around the panned visual center (camPan), not
+// the raw 3-D origin.  The visual center in screen space is (W/2 + camPan.x,
+// H/2 + camPan.y), which corresponds to the projected 3-D origin offset by
+// camPan.  So we just keep camPan constant during rotation – the offset stays
+// fixed and the 3-D cloud rotates around the screen point (W/2+px, H/2+py).
+// That is already the correct behaviour with the current project() formula,
+// so no extra adjustment is needed for rotation.
 
-// --- Greedy nearest-neighbour seed ---
-function buildGreedyRoute(startName,endName,cc){
-  const visited=new Set([startName]);
-  let progress=advanceProgress(startName,initProgress(cc),cc);
-  const r=[startName];
-  while(true){
-    const candidates=getCandidates(visited,progress,cc,endName);
-    if(candidates.length===0)break;
-    const cur=systems.find(s=>s.name===r[r.length-1]);
-    let best=null,bestD=Infinity;
-    for(const name of candidates){
-      const s=systems.find(s=>s.name===name);
-      const d=dist(cur,s);
-      if(d<bestD){bestD=d;best=name;}
-    }
-    if(!best)break;
-    r.push(best);
-    visited.add(best);
-    progress=advanceProgress(best,progress,cc);
-  }
-  if(!chainsComplete(progress,cc))return null;
-  if(endName&&endName!==startName&&r[r.length-1]!==endName)r.push(endName);
-  return r;
-}
-
-// --- 2-opt ---
-function twoOpt(r,cc,deadline){
-  const n=r.length;
-  const fixHead=1,fixTail=n-2;
-  let improved=true;
-  while(improved&&Date.now()<deadline){
-    improved=false;
-    for(let i=fixHead;i<=fixTail-1&&Date.now()<deadline;i++){
-      for(let j=i+1;j<=fixTail;j++){
-        const candidate=[...r.slice(0,i),...r.slice(i,j+1).reverse(),...r.slice(j+1)];
-        if(!isValidRoute(candidate,cc))continue;
-        if(routeDist(candidate)<routeDist(r)-1e-9){r=candidate;improved=true;break;}
-      }
-      if(improved)break;
-    }
-  }
-  return r;
-}
-
-// --- Or-opt ---
-function orOpt(r,cc,deadline){
-  const n=r.length;
-  let improved=true;
-  while(improved&&Date.now()<deadline){
-    improved=false;
-    const baseD=routeDist(r);
-    outer:for(let i=1;i<n-1&&Date.now()<deadline;i++){
-      for(let j=1;j<n-1;j++){
-        if(j===i)continue;
-        const candidate=r.filter((_,idx)=>idx!==i);
-        candidate.splice(j,0,r[i]);
-        if(!isValidRoute(candidate,cc))continue;
-        if(routeDist(candidate)<baseD-1e-9){r=candidate;improved=true;break outer;}
-      }
-    }
-  }
-  return r;
-}
-
-// --- Double-bridge ---
-function doubleBridge(r,cc){
-  const n=r.length;
-  if(n<8)return r;
-  const interior=r.slice(1,n-1);const len=interior.length;
-  if(len<4)return r;
-  const a=1+Math.floor(Math.random()*Math.floor(len/4));
-  const b=1+Math.floor(len/4)+Math.floor(Math.random()*Math.floor(len/4));
-  const c=1+Math.floor(len/2)+Math.floor(Math.random()*Math.floor(len/4));
-  const candidate=[...r.slice(0,a),...r.slice(c,n-1),...r.slice(b,c),...r.slice(a,b),...r.slice(n-1)];
-  return isValidRoute(candidate,cc)?candidate:r;
-}
-
-// --- ILS ---
-function iteratedLocalSearch(startName,endName,cc,timeLimit){
-  const deadline=Date.now()+timeLimit;
-  let best=buildGreedyRoute(startName,endName,cc);
-  if(!best)return null;
-  best=twoOpt(best,cc,deadline);
-  best=orOpt(best,cc,deadline);
-  let bestD=routeDist(best);
-  while(Date.now()<deadline){
-    let candidate=doubleBridge(best,cc);
-    candidate=twoOpt(candidate,cc,deadline);
-    candidate=orOpt(candidate,cc,deadline);
-    const d=routeDist(candidate);
-    if(d<bestD-1e-9){bestD=d;best=candidate;}
-  }
-  return{route:best,dist:bestD};
-}
-
-// --- Branch & Bound ---
-function branchAndBound(startName,endName,cc,timeLimit){
-  const ilsTime=Math.floor(timeLimit*0.40);
-  const deadlineBB=Date.now()+timeLimit;
-  const ilsResult=iteratedLocalSearch(startName,endName,cc,ilsTime);
-  let bestRoute=ilsResult?ilsResult.route:buildGreedyRoute(startName,endName,cc);
-  let bestDist=bestRoute?routeDist(bestRoute):Infinity;
-  const endSys=endName?systems.find(s=>s.name===endName):null;
-  let timedOut=false,nodesChecked=0;
-  const initVis=new Set([startName]);
-  const initProg=advanceProgress(startName,initProgress(cc),cc);
-  const stack=[{route:[startName],visited:initVis,progress:initProg,partialDist:0}];
-  while(stack.length>0){
-    if(Date.now()>=deadlineBB){timedOut=true;break;}
-    const{route,visited,progress,partialDist}=stack.pop();
-    nodesChecked++;
-    const candidates=getCandidates(visited,progress,cc,endName);
-    if(candidates.length===0){
-      if(!chainsComplete(progress,cc))continue;
-      const curSys=systems.find(s=>s.name===route[route.length-1]);
-      const fullDist=partialDist+(endSys&&route[route.length-1]!==endName?dist(curSys,endSys):0);
-      if(fullDist<bestDist){
-        bestDist=fullDist;
-        bestRoute=(endName&&endName!==startName&&route[route.length-1]!==endName)?[...route,endName]:[...route];
-      }
-      continue;
-    }
-    const curSys=systems.find(s=>s.name===route[route.length-1]);
-    const expanded=candidates.map(name=>{
-      const s=systems.find(s=>s.name===name);
-      return{name,sys:s,d:dist(curSys,s)};
-    }).sort((a,b)=>a.d-b.d);
-    for(let i=expanded.length-1;i>=0;i--){
-      const{name,sys,d}=expanded[i];
-      const newPartial=partialDist+d;
-      const newProgress=advanceProgress(name,progress,cc);
-      const newVisited=new Set(visited);
-      newVisited.add(name);
-      const remainingSys=systems.filter(s=>!newVisited.has(s.name)&&s.name!==endName);
-      const lb=lowerBound(newPartial,sys,remainingSys,endSys);
-      if(lb>=bestDist)continue;
-      stack.push({route:[...route,name],visited:newVisited,progress:newProgress,partialDist:newPartial});
-    }
-  }
-  return{route:bestRoute,dist:bestDist,timedOut,nodesChecked};
-}
-
-// --- Self-check ---
-function selfCheck(r,cc,startName,endName){
-  const issues=[];
-  if(!isValidRoute(r,cc))issues.push('Chain order constraints violated!');
-  if(startName&&r[0]!==startName)issues.push(`Does not start at "${startName}"`);
-  if(endName&&endName!==startName&&r[r.length-1]!==endName)issues.push(`Does not end at "${endName}"`);
-  const inRoute=new Set(r);
-  for(const sys of systems){if(!inRoute.has(sys.name))issues.push(`"${sys.name}" missing from route`);}
-  return issues;
-}
-
-// --- Calculate ---
-function calculateRoute(){
-  const startName=document.getElementById('startSel').value;
-  const endName=document.getElementById('endSel').value||null;
-  const cc=chains.filter(c=>c.items.length>0);
-  cc.forEach(c=>{c.items=c.items.filter((v,i)=>i===0||v!==c.items[i-1]);});
-  if(systems.length<2){setStatus('Need at least 2 systems.','err');return;}
-  if(!startName){setStatus('Select a start system.','err');return;}
-  setStatus('Running ILS + B&B\u2026','info');
-  const t0=Date.now();
-  setTimeout(()=>{
-    try{
-      const TIME_LIMIT=2500;
-      const{route:best,dist:bestDist,timedOut,nodesChecked}=branchAndBound(startName,endName,cc,TIME_LIMIT);
-      if(!best){setStatus('No valid route found \u2014 check chain constraints.','err');return;}
-      const elapsed=Date.now()-t0;
-      route=best;
-      const issues=selfCheck(route,cc,startName,endName);
-      const optimality=timedOut?'best-in-time':'optimal';
-      renderRoute(elapsed,nodesChecked,issues,optimality);
-      drawCanvas();saveState();
-      if(issues.length>0)setStatus(`\u26a0 ${issues[0]}`,'warn');
-      else if(timedOut)setStatus(`\u23f1 ILS+B&B timeout \u2014 best found: ${bestDist.toFixed(1)} ly \u00b7 ${nodesChecked} nodes \u00b7 ${elapsed}ms`,'warn');
-      else setStatus(`\u2714 Optimal: ${bestDist.toFixed(1)} ly \u00b7 ${nodesChecked} nodes \u00b7 ${elapsed}ms`,'ok');
-    }catch(e){setStatus('Error: '+e.message,'err');console.error(e);}
-  },20);
-}
-
-// --- Render route + stats ---
-function renderRoute(elapsed,nodeCount,issues,optimality){
-  const list=document.getElementById('routeList');
-  const startName=document.getElementById('startSel').value;
-  const endName=document.getElementById('endSel').value||startName;
-  list.innerHTML='';let totalDist=0;
-  route.forEach((name,i)=>{
-    if(i>0){
-      const a=systems.find(s=>s.name===route[i-1]);
-      const b=systems.find(s=>s.name===name);
-      const d=(a&&b)?dist(a,b):0;totalDist+=d;
-      const arrow=document.createElement('div');arrow.className='route-step';
-      arrow.innerHTML=`<span class="route-arrow">\u2192</span><span class="route-dist">${d.toFixed(1)}</span>`;
-      list.appendChild(arrow);
-    }
-    const node=document.createElement('div');node.className='route-step';
-    const isStart=name===startName&&i===0;
-    const isEnd=name===endName&&i===route.length-1;
-    const span=document.createElement('span');
-    span.className='route-node'+(isStart?' start-node':isEnd?' end-node':'');
-    span.textContent=`${i+1}. ${name}`;
-    node.appendChild(span);
-    list.appendChild(node);
-  });
-  document.getElementById('route-summary').textContent=route.length>0?`${route.length} stops \u00b7 ${totalDist.toFixed(1)} ly`:'';
-  const checkOk=issues&&issues.length===0;
-  const isOptimal=optimality==='optimal';
-  if(route.length>0){
-    document.getElementById('statsContent').innerHTML=
-      `<div><span class="stat-label">Systems</span><span class="stat-val">${systems.length}</span></div>`+
-      `<div><span class="stat-label">Route stops</span><span class="stat-val">${route.length}</span></div>`+
-      `<div><span class="stat-label">Total dist.</span><span class="stat-val">${totalDist.toFixed(1)} ly</span></div>`+
-      `<div><span class="stat-label">Jumps</span><span class="stat-val">${route.length-1}</span></div>`+
-      `<div><span class="stat-label">B&amp;B nodes</span><span class="stat-val">${nodeCount.toLocaleString()}</span></div>`+
-      `<div><span class="stat-label">Time</span><span class="stat-val">${elapsed}ms</span></div>`+
-      `<div><span class="stat-label">Optimality</span><span class="stat-val ${isOptimal?'ok':''}">${isOptimal?'\u2605 Optimal':'\u23f1 Best/time'}</span></div>`+
-      `<div><span class="stat-label">Self-check</span><span class="stat-val ${checkOk?'ok':'err'}">${checkOk?'\u2714 PASS':'\u2718 FAIL'}</span></div>`+
-      (issues&&issues.length>0?issues.map(i=>`<div style="color:var(--danger);font-size:10px;clear:both">${i}</div>`).join(''):'');
-    document.getElementById('statsBox').classList.add('has-results');
-  }
-}
-
-// --- Canvas 3D ---
-// camPan: 2D screen-space offset in pixels (applied after projection)
 let camRot={x:0.4,y:0.3},camZoom=1,camPan={x:0,y:0};
 let isDragging=false,isPanning=false,lastMouse={x:0,y:0},normalizedSystems=[];
 const canvas=document.getElementById('canvas');const ctx=canvas.getContext('2d');
+
 function normalize(){if(!systems.length){normalizedSystems=[];return;}const xs=systems.map(s=>s.x),ys=systems.map(s=>s.y),zs=systems.map(s=>s.z);const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),minZ=Math.min(...zs),maxZ=Math.max(...zs);const range=Math.max(maxX-minX,maxY-minY,maxZ-minZ,1);normalizedSystems=systems.map(s=>({name:s.name,nx:(s.x-(minX+maxX)/2)/range,ny:(s.y-(minY+maxY)/2)/range,nz:(s.z-(minZ+maxZ)/2)/range}));}
+
 function project(nx,ny,nz){
   const cosY=Math.cos(camRot.y),sinY=Math.sin(camRot.y);
   const rx=nx*cosY-nz*sinY,rz=nx*sinY+nz*cosY;
@@ -682,9 +387,58 @@ function project(nx,ny,nz){
     depth: rz*cosX+ny*sinX
   };
 }
-function drawCanvas(){normalize();canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;ctx.clearRect(0,0,canvas.width,canvas.height);if(!systems.length){ctx.fillStyle='#30363d';ctx.font='14px Segoe UI';ctx.textAlign='center';ctx.fillText('Import or add systems to begin',canvas.width/2,canvas.height/2);return;}const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value||startName;ctx.strokeStyle='rgba(48,54,61,0.4)';ctx.lineWidth=0.5;for(let v=-0.5;v<=0.5;v+=0.25){const p1=project(v,-0.5,0),p2=project(v,0.5,0),p3=project(-0.5,v,0),p4=project(0.5,v,0);ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();ctx.beginPath();ctx.moveTo(p3.sx,p3.sy);ctx.lineTo(p4.sx,p4.sy);ctx.stroke();}if(route.length>1){for(let i=0;i<route.length-1;i++){const a=normalizedSystems.find(s=>s.name===route[i]),b=normalizedSystems.find(s=>s.name===route[i+1]);if(!a||!b)continue;const pa=project(a.nx,a.ny,a.nz),pb=project(b.nx,b.ny,b.nz);ctx.strokeStyle='rgba(88,166,255,0.6)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(pa.sx,pa.sy);ctx.lineTo(pb.sx,pb.sy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(88,166,255,0.7)';ctx.font='9px Segoe UI';ctx.textAlign='center';ctx.fillText(i+1,(pa.sx+pb.sx)/2,(pa.sy+pb.sy)/2-3);}}const projected=normalizedSystems.map(s=>{const p=project(s.nx,s.ny,s.nz);return{...s,...p};}).sort((a,b)=>a.depth-b.depth);projected.forEach(s=>{const inRoute=route.includes(s.name),isStart=s.name===startName,isEnd=s.name===endName&&endName;const color=isStart?'#3fb950':isEnd?'#f85149':inRoute?'#58a6ff':'#444c56';const r=isStart||isEnd?6:inRoute?5:3.5;ctx.beginPath();ctx.arc(s.sx,s.sy,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();if(inRoute||isStart||isEnd){ctx.strokeStyle=color;ctx.lineWidth=1;ctx.globalAlpha=0.3;ctx.beginPath();ctx.arc(s.sx,s.sy,r+3,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;}ctx.fillStyle=inRoute?'#c9d1d9':'#8b949e';ctx.font=(isStart||isEnd)?'bold 11px Segoe UI':'10px Segoe UI';ctx.textAlign='left';ctx.fillText(s.name,s.sx+r+3,s.sy+4);});}
 
-// Left-click = rotate; Right-click = pan
+function drawCanvas(){
+  normalize();
+  canvas.width=canvas.offsetWidth;
+  canvas.height=canvas.offsetHeight;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(!systems.length){
+    ctx.fillStyle='#30363d';ctx.font='14px Segoe UI';ctx.textAlign='center';
+    ctx.fillText('Import or add systems to begin',canvas.width/2,canvas.height/2);
+    return;
+  }
+  const startName=document.getElementById('startSel').value;
+  const endName=document.getElementById('endSel').value||startName;
+  ctx.strokeStyle='rgba(48,54,61,0.4)';ctx.lineWidth=0.5;
+  for(let v=-0.5;v<=0.5;v+=0.25){
+    const p1=project(v,-0.5,0),p2=project(v,0.5,0),p3=project(-0.5,v,0),p4=project(0.5,v,0);
+    ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(p3.sx,p3.sy);ctx.lineTo(p4.sx,p4.sy);ctx.stroke();
+  }
+  if(route.length>1){
+    for(let i=0;i<route.length-1;i++){
+      const a=normalizedSystems.find(s=>s.name===route[i]),b=normalizedSystems.find(s=>s.name===route[i+1]);
+      if(!a||!b)continue;
+      const pa=project(a.nx,a.ny,a.nz),pb=project(b.nx,b.ny,b.nz);
+      ctx.strokeStyle='rgba(88,166,255,0.6)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+      ctx.beginPath();ctx.moveTo(pa.sx,pa.sy);ctx.lineTo(pb.sx,pb.sy);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle='rgba(88,166,255,0.7)';ctx.font='9px Segoe UI';ctx.textAlign='center';
+      ctx.fillText(i+1,(pa.sx+pb.sx)/2,(pa.sy+pb.sy)/2-3);
+    }
+  }
+  const projected=normalizedSystems.map(s=>{const p=project(s.nx,s.ny,s.nz);return{...s,...p};}).sort((a,b)=>a.depth-b.depth);
+  projected.forEach(s=>{
+    const inRoute=route.includes(s.name),isStart=s.name===startName,isEnd=s.name===endName&&endName;
+    const color=isStart?'#3fb950':isEnd?'#f85149':inRoute?'#58a6ff':'#444c56';
+    const r=isStart||isEnd?6:inRoute?5:3.5;
+    ctx.beginPath();ctx.arc(s.sx,s.sy,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+    if(inRoute||isStart||isEnd){
+      ctx.strokeStyle=color;ctx.lineWidth=1;ctx.globalAlpha=0.3;
+      ctx.beginPath();ctx.arc(s.sx,s.sy,r+3,0,Math.PI*2);ctx.stroke();
+      ctx.globalAlpha=1;
+    }
+    ctx.fillStyle=inRoute?'#c9d1d9':'#8b949e';
+    ctx.font=(isStart||isEnd)?'bold 11px Segoe UI':'10px Segoe UI';
+    ctx.textAlign='left';
+    ctx.fillText(s.name,s.sx+r+3,s.sy+4);
+  });
+}
+
+// Left-click drag = rotate (orbits around panned visual center because camPan
+// is added as a constant offset in project() – no extra correction needed).
+// Right-click drag = pan.
 canvas.addEventListener('mousedown',e=>{
   if(e.button===2){isPanning=true;canvas.classList.add('panning');}
   else{isDragging=true;}
@@ -703,16 +457,40 @@ canvas.addEventListener('mouseup',e=>{
 });
 canvas.addEventListener('mouseleave',()=>{isDragging=false;isPanning=false;canvas.classList.remove('panning');});
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+// Scroll-wheel zoom: keep the world point under the cursor stationary.
+// Before zoom the screen pos of a point p is:
+//   sx = W/2 + pan.x + rx*scale_old
+// After zoom it must remain at the same sx:
+//   sx = W/2 + pan.x_new + rx*scale_new
+// Subtracting: 0 = (pan.x_new - pan.x) + rx*(scale_new - scale_old)
+// rx = (sx - W/2 - pan.x) / scale_old = (cursor_x - W/2 - pan.x) / scale_old
+// => pan.x_new = pan.x - rx*(scale_new - scale_old)
+//             = pan.x + (cursor_x - W/2 - pan.x) * (1 - scale_new/scale_old)
 canvas.addEventListener('wheel',e=>{
   e.preventDefault();
-  camZoom*=e.deltaY<0?1.1:0.9;
-  camZoom=Math.max(0.2,Math.min(50,camZoom)); // allow zooming in much further
+  const rect=canvas.getBoundingClientRect();
+  // cursor position relative to canvas top-left
+  const mx=e.clientX-rect.left;
+  const my=e.clientY-rect.top;
+  // offset of cursor from canvas center
+  const cx=mx-canvas.width/2;
+  const cy=my-canvas.height/2;
+  const factor=e.deltaY<0?1.1:0.9;
+  const oldZoom=camZoom;
+  camZoom=Math.max(0.2,Math.min(50,camZoom*factor));
+  const actualFactor=camZoom/oldZoom; // may differ at limits
+  // Adjust pan so the world point under cursor stays fixed
+  camPan.x=cx-(cx-camPan.x)*actualFactor;
+  camPan.y=cy-(cy-camPan.y)*actualFactor;
   drawCanvas();
 },{passive:false});
+
 let lastTouch=null;
 canvas.addEventListener('touchstart',e=>{lastTouch=e.touches[0];});
 canvas.addEventListener('touchmove',e=>{e.preventDefault();if(!lastTouch)return;const t=e.touches[0];camRot.y+=(t.clientX-lastTouch.clientX)*0.006;camRot.x+=(t.clientY-lastTouch.clientY)*0.006;lastTouch=t;drawCanvas();},{passive:false});
 window.addEventListener('resize',drawCanvas);
+
 function exportCSV(){if(!route.length){setStatus('Calculate a route first.','err');return;}const lines=['Name,X,Y,Z'];route.forEach(name=>{const s=systems.find(s=>s.name===name);if(s)lines.push(`${s.name},${s.x},${s.y},${s.z}`);});const blob=new Blob([lines.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='route.csv';a.click();setStatus('Route exported.','ok');}
 function clearAll(){if(!confirm('Clear all systems, chains, and route?'))return;systems=[];chains=[];route=[];renderSystems();renderChains();updateSelects();document.getElementById('routeList').innerHTML='';document.getElementById('route-summary').textContent='';clearStats();drawCanvas();localStorage.removeItem('route_opt_state');setStatus('Cleared.','info');}
 function setStatus(msg,type){const el=document.getElementById('status');el.textContent=msg;el.className='status-'+(type||'info');}
