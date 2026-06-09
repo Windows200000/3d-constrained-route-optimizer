@@ -29,7 +29,9 @@
   .main { display: flex; flex: 1; overflow: hidden; }
 
   /* ── Left column ── */
-  .left { width: var(--left-w); min-width: 140px; max-width: 400px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .left { width: var(--left-w); min-width: 140px; max-width: 400px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; position: relative; }
+  /* scrollable body of left col */
+  .left-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
   .panel-section { border-bottom: 1px solid var(--border); padding: 10px 12px; }
   .panel-section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px; }
   .row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
@@ -67,6 +69,7 @@
   .center { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 200px; }
   #canvas { flex: 1; display: block; cursor: grab; background: #080c10; }
   #canvas:active { cursor: grabbing; }
+  #canvas.panning { cursor: move; }
   .bottom { height: 180px; flex-shrink: 0; background: var(--surface); border-top: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
   .bottom-header { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .bottom-header h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); flex: 1; }
@@ -110,10 +113,9 @@
   .add-chain-btn { width: 100%; background: none; border: 1px dashed var(--border); color: var(--text-muted); padding: 6px; border-radius: 4px; cursor: pointer; font-size: 11px; }
   .add-chain-btn:hover { border-color: var(--chain); color: var(--chain); }
 
-  /* ── Stats box (always visible above Calculate) ── */
+  /* ── Stats box (always visible, scrolls with left-scroll) ── */
   .stats-box {
     border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
     padding: 8px 12px;
     font-size: 12px;
     line-height: 2;
@@ -130,8 +132,17 @@
   .stat-val.err { color: var(--danger); }
   .stat-empty { color: var(--text-muted); font-size: 11px; font-style: italic; }
 
-  /* Left footer */
-  .left-footer { padding: 8px 12px; flex-shrink: 0; }
+  /* ── Sticky calculate footer ── */
+  .left-footer {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    /* floats over scrollable content via stacking */
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+  }
 
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -149,45 +160,49 @@
 <div class="main" id="mainLayout">
   <!-- LEFT -->
   <div class="left" id="leftCol">
-    <div class="panel-section">
-      <h2>Route Endpoints</h2>
-      <div class="row"><label>Start</label><select id="startSel" onchange="saveState()"><option value="">&mdash; none &mdash;</option></select></div>
-      <div class="row"><label>End</label><select id="endSel" onchange="saveState()"><option value="">&mdash; none &mdash;</option></select></div>
-    </div>
-    <div class="panel-section">
-      <h2>Add System Manually</h2>
-      <div class="row"><input type="text" id="manualName" placeholder="Name" style="flex:2"></div>
-      <div class="row">
-        <input type="text" id="manualX" placeholder="X" style="width:44px;flex:none">
-        <input type="text" id="manualY" placeholder="Y" style="width:44px;flex:none">
-        <input type="text" id="manualZ" placeholder="Z" style="width:44px;flex:none">
-        <button class="btn btn-sm" onclick="addManual()">Add</button>
+    <!-- scrollable area -->
+    <div class="left-scroll">
+      <div class="panel-section">
+        <h2>Route Endpoints</h2>
+        <div class="row"><label>Start</label><select id="startSel" onchange="saveState()"><option value="">&mdash; none &mdash;</option></select></div>
+        <div class="row"><label>End</label><select id="endSel" onchange="saveState()"><option value="">&mdash; none &mdash;</option></select></div>
       </div>
-    </div>
-    <div class="panel-section">
-      <h2>Import Systems CSV (Name,X,Y,Z)</h2>
-      <textarea id="csvInput" rows="2" placeholder="Name,X,Y,Z&#10;Sol,0,0,0"></textarea>
-      <div class="row" style="margin-top:6px">
-        <button class="btn" style="flex:1" onclick="importCSV()">Import</button>
-        <label class="btn" style="flex:1;text-align:center;cursor:pointer">Load File <input type="file" accept=".csv" onchange="loadFile(event)" style="display:none"></label>
+      <div class="panel-section">
+        <h2>Add System Manually</h2>
+        <div class="row"><input type="text" id="manualName" placeholder="Name" style="flex:2"></div>
+        <div class="row">
+          <input type="text" id="manualX" placeholder="X" style="width:44px;flex:none">
+          <input type="text" id="manualY" placeholder="Y" style="width:44px;flex:none">
+          <input type="text" id="manualZ" placeholder="Z" style="width:44px;flex:none">
+          <button class="btn btn-sm" onclick="addManual()">Add</button>
+        </div>
       </div>
-    </div>
-    <div class="panel-section">
-      <h2>Import Chains CSV</h2>
-      <textarea id="chainsInput" rows="2" placeholder="Chain,Position,Name,X,Y,Z&#10;1,1,Sol,0,0,0"></textarea>
-      <div class="row" style="margin-top:6px">
-        <button class="btn" style="flex:1" onclick="importChainsCSV()">Import</button>
-        <label class="btn" style="flex:1;text-align:center;cursor:pointer">Load File <input type="file" accept=".csv" onchange="loadChainsFile(event)" style="display:none"></label>
+      <div class="panel-section">
+        <h2>Import Systems CSV (Name,X,Y,Z)</h2>
+        <textarea id="csvInput" rows="2" placeholder="Name,X,Y,Z&#10;Sol,0,0,0"></textarea>
+        <div class="row" style="margin-top:6px">
+          <button class="btn" style="flex:1" onclick="importCSV()">Import</button>
+          <label class="btn" style="flex:1;text-align:center;cursor:pointer">Load File <input type="file" accept=".csv" onchange="loadFile(event)" style="display:none"></label>
+        </div>
       </div>
-    </div>
-    <!-- Stats box: always visible, empty until first calculate -->
-    <div class="stats-box" id="statsBox">
-      <div class="stats-box-header">
-        <span class="stats-box-title">Result</span>
-        <span class="stats-box-close" id="statsClose" onclick="clearStats()" title="Clear">&#x2715;</span>
+      <div class="panel-section">
+        <h2>Import Chains CSV</h2>
+        <textarea id="chainsInput" rows="2" placeholder="Chain,Position,Name,X,Y,Z&#10;1,1,Sol,0,0,0"></textarea>
+        <div class="row" style="margin-top:6px">
+          <button class="btn" style="flex:1" onclick="importChainsCSV()">Import</button>
+          <label class="btn" style="flex:1;text-align:center;cursor:pointer">Load File <input type="file" accept=".csv" onchange="loadChainsFile(event)" style="display:none"></label>
+        </div>
       </div>
-      <div id="statsContent"><span class="stat-empty">No route calculated yet.</span></div>
-    </div>
+      <!-- Stats box: always visible, empty until first calculate -->
+      <div class="stats-box" id="statsBox">
+        <div class="stats-box-header">
+          <span class="stats-box-title">Result</span>
+          <span class="stats-box-close" id="statsClose" onclick="clearStats()" title="Clear">&#x2715;</span>
+        </div>
+        <div id="statsContent"><span class="stat-empty">No route calculated yet.</span></div>
+      </div>
+    </div><!-- end left-scroll -->
+    <!-- Sticky calculate button floats over content when scrolled -->
     <div class="left-footer">
       <button class="btn btn-primary" style="width:100%;padding:8px" onclick="calculateRoute()">&#x25B6; CALCULATE ROUTE</button>
     </div>
@@ -209,7 +224,8 @@
     </div>
   </div>
 
-  <!-- RESIZE HANDLE: center | right -->
+  <!-- RESIZE HANDLE: center | right-systems
+       Dragging this resizes rightSystems width; center (flex:1) absorbs the slack -->
   <div class="resize-handle" id="rh-right" title="Drag to resize"></div>
 
   <!-- RIGHT: Systems + Chains side by side -->
@@ -269,24 +285,24 @@ let systems=[],chains=[],route=[],chainIdSeq=0;
     });
   }
 
-  // Left col | center
+  // Left col | center (left grows/shrinks, center is flex:1 and absorbs)
   makeColResizer(
     document.getElementById('rh-left'),
     ()=>document.getElementById('leftCol').offsetWidth,
     w=>{ document.getElementById('leftCol').style.width=w+'px'; },
     ()=>document.getElementById('centerCol').offsetWidth,
-    w=>{ /* center is flex:1, left width drives it */ },
+    w=>{ /* center flex:1 auto-adjusts */ },
     140, 200
   );
 
-  // center | right col
+  // center | right-systems: dragging grows/shrinks rightSystems; center (flex:1) absorbs
   makeColResizer(
     document.getElementById('rh-right'),
     ()=>document.getElementById('centerCol').offsetWidth,
-    w=>{ document.getElementById('centerCol').style.flexBasis=w+'px'; document.getElementById('centerCol').style.flexGrow='0'; },
-    ()=>document.getElementById('rightCol').offsetWidth,
-    w=>{ document.getElementById('rightCol').style.width=w+'px'; },
-    200, 240
+    w=>{ /* center is flex:1; shrinks automatically as rightSystems grows */ },
+    ()=>document.getElementById('rightSystems').offsetWidth,
+    w=>{ document.getElementById('rightSystems').style.width=w+'px'; },
+    200, 120
   );
 
   // inner right: systems | chains
@@ -649,16 +665,50 @@ function renderRoute(elapsed,nodeCount,issues,optimality){
 }
 
 // --- Canvas 3D ---
-let camRot={x:0.4,y:0.3},camZoom=1,isDragging=false,lastMouse={x:0,y:0},normalizedSystems=[];
+// camPan: 2D screen-space offset in pixels (applied after projection)
+let camRot={x:0.4,y:0.3},camZoom=1,camPan={x:0,y:0};
+let isDragging=false,isPanning=false,lastMouse={x:0,y:0},normalizedSystems=[];
 const canvas=document.getElementById('canvas');const ctx=canvas.getContext('2d');
 function normalize(){if(!systems.length){normalizedSystems=[];return;}const xs=systems.map(s=>s.x),ys=systems.map(s=>s.y),zs=systems.map(s=>s.z);const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),minZ=Math.min(...zs),maxZ=Math.max(...zs);const range=Math.max(maxX-minX,maxY-minY,maxZ-minZ,1);normalizedSystems=systems.map(s=>({name:s.name,nx:(s.x-(minX+maxX)/2)/range,ny:(s.y-(minY+maxY)/2)/range,nz:(s.z-(minZ+maxZ)/2)/range}));}
-function project(nx,ny,nz){const cosY=Math.cos(camRot.y),sinY=Math.sin(camRot.y);const rx=nx*cosY-nz*sinY,rz=nx*sinY+nz*cosY;const cosX=Math.cos(camRot.x),sinX=Math.sin(camRot.x);const ry2=ny*cosX-rz*sinX;const scale=camZoom*Math.min(canvas.width,canvas.height)*0.38;return{sx:canvas.width/2+rx*scale,sy:canvas.height/2-ry2*scale,depth:rz*cosX+ny*sinX};}
+function project(nx,ny,nz){
+  const cosY=Math.cos(camRot.y),sinY=Math.sin(camRot.y);
+  const rx=nx*cosY-nz*sinY,rz=nx*sinY+nz*cosY;
+  const cosX=Math.cos(camRot.x),sinX=Math.sin(camRot.x);
+  const ry2=ny*cosX-rz*sinX;
+  const scale=camZoom*Math.min(canvas.width,canvas.height)*0.38;
+  return{
+    sx: canvas.width/2  + camPan.x + rx*scale,
+    sy: canvas.height/2 + camPan.y - ry2*scale,
+    depth: rz*cosX+ny*sinX
+  };
+}
 function drawCanvas(){normalize();canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;ctx.clearRect(0,0,canvas.width,canvas.height);if(!systems.length){ctx.fillStyle='#30363d';ctx.font='14px Segoe UI';ctx.textAlign='center';ctx.fillText('Import or add systems to begin',canvas.width/2,canvas.height/2);return;}const startName=document.getElementById('startSel').value;const endName=document.getElementById('endSel').value||startName;ctx.strokeStyle='rgba(48,54,61,0.4)';ctx.lineWidth=0.5;for(let v=-0.5;v<=0.5;v+=0.25){const p1=project(v,-0.5,0),p2=project(v,0.5,0),p3=project(-0.5,v,0),p4=project(0.5,v,0);ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();ctx.beginPath();ctx.moveTo(p3.sx,p3.sy);ctx.lineTo(p4.sx,p4.sy);ctx.stroke();}if(route.length>1){for(let i=0;i<route.length-1;i++){const a=normalizedSystems.find(s=>s.name===route[i]),b=normalizedSystems.find(s=>s.name===route[i+1]);if(!a||!b)continue;const pa=project(a.nx,a.ny,a.nz),pb=project(b.nx,b.ny,b.nz);ctx.strokeStyle='rgba(88,166,255,0.6)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(pa.sx,pa.sy);ctx.lineTo(pb.sx,pb.sy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(88,166,255,0.7)';ctx.font='9px Segoe UI';ctx.textAlign='center';ctx.fillText(i+1,(pa.sx+pb.sx)/2,(pa.sy+pb.sy)/2-3);}}const projected=normalizedSystems.map(s=>{const p=project(s.nx,s.ny,s.nz);return{...s,...p};}).sort((a,b)=>a.depth-b.depth);projected.forEach(s=>{const inRoute=route.includes(s.name),isStart=s.name===startName,isEnd=s.name===endName&&endName;const color=isStart?'#3fb950':isEnd?'#f85149':inRoute?'#58a6ff':'#444c56';const r=isStart||isEnd?6:inRoute?5:3.5;ctx.beginPath();ctx.arc(s.sx,s.sy,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();if(inRoute||isStart||isEnd){ctx.strokeStyle=color;ctx.lineWidth=1;ctx.globalAlpha=0.3;ctx.beginPath();ctx.arc(s.sx,s.sy,r+3,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;}ctx.fillStyle=inRoute?'#c9d1d9':'#8b949e';ctx.font=(isStart||isEnd)?'bold 11px Segoe UI':'10px Segoe UI';ctx.textAlign='left';ctx.fillText(s.name,s.sx+r+3,s.sy+4);});}
-canvas.addEventListener('mousedown',e=>{isDragging=true;lastMouse={x:e.clientX,y:e.clientY};});
-canvas.addEventListener('mousemove',e=>{if(!isDragging)return;camRot.y+=(e.clientX-lastMouse.x)*0.006;camRot.x+=(e.clientY-lastMouse.y)*0.006;lastMouse={x:e.clientX,y:e.clientY};drawCanvas();});
-canvas.addEventListener('mouseup',()=>isDragging=false);
-canvas.addEventListener('mouseleave',()=>isDragging=false);
-canvas.addEventListener('wheel',e=>{e.preventDefault();camZoom*=e.deltaY<0?1.1:0.9;camZoom=Math.max(0.2,Math.min(8,camZoom));drawCanvas();},{passive:false});
+
+// Left-click = rotate; Right-click = pan
+canvas.addEventListener('mousedown',e=>{
+  if(e.button===2){isPanning=true;canvas.classList.add('panning');}
+  else{isDragging=true;}
+  lastMouse={x:e.clientX,y:e.clientY};
+  e.preventDefault();
+});
+canvas.addEventListener('mousemove',e=>{
+  const dx=e.clientX-lastMouse.x, dy=e.clientY-lastMouse.y;
+  if(isDragging){camRot.y+=dx*0.006;camRot.x+=dy*0.006;drawCanvas();}
+  else if(isPanning){camPan.x+=dx;camPan.y+=dy;drawCanvas();}
+  lastMouse={x:e.clientX,y:e.clientY};
+});
+canvas.addEventListener('mouseup',e=>{
+  if(e.button===2){isPanning=false;canvas.classList.remove('panning');}
+  else isDragging=false;
+});
+canvas.addEventListener('mouseleave',()=>{isDragging=false;isPanning=false;canvas.classList.remove('panning');});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  camZoom*=e.deltaY<0?1.1:0.9;
+  camZoom=Math.max(0.2,Math.min(50,camZoom)); // allow zooming in much further
+  drawCanvas();
+},{passive:false});
 let lastTouch=null;
 canvas.addEventListener('touchstart',e=>{lastTouch=e.touches[0];});
 canvas.addEventListener('touchmove',e=>{e.preventDefault();if(!lastTouch)return;const t=e.touches[0];camRot.y+=(t.clientX-lastTouch.clientX)*0.006;camRot.x+=(t.clientY-lastTouch.clientY)*0.006;lastTouch=t;drawCanvas();},{passive:false});
