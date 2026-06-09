@@ -99,18 +99,18 @@
 </head>
 <body>
 <header>
-  <h1>⬡ 3D ROUTE OPTIMIZER</h1>
-  <span>TSP with chain ordering constraints · 3D visualization · B&B + 2-opt/3-opt solver</span>
+  <h1>&#x2B21; 3D ROUTE OPTIMIZER</h1>
+  <span>TSP with chain ordering constraints &middot; 3D visualization &middot; B&amp;B + 2-opt/3-opt solver</span>
   <div style="flex:1"></div>
-  <button class="btn btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
-  <button class="btn btn-sm" onclick="clearAll()">✕ Clear All</button>
+  <button class="btn btn-sm" onclick="exportCSV()">&#x2B07; Export CSV</button>
+  <button class="btn btn-sm" onclick="clearAll()">&#x2715; Clear All</button>
 </header>
 <div class="main">
   <div class="left">
     <div class="panel-section">
       <h2>Route Endpoints</h2>
-      <div class="row"><label>Start</label><select id="startSel" onchange="saveState()"><option value="">— none —</option></select></div>
-      <div class="row"><label>End</label><select id="endSel" onchange="saveState()"><option value="">— none —</option></select></div>
+      <div class="row"><label>Start</label><select id="startSel" onchange="saveState()"><option value="">&mdash; none &mdash;</option></select></div>
+      <div class="row"><label>End</label><select id="endSel" onchange="saveState()"><option value="">&mdash; none &mdash;</option></select></div>
     </div>
     <div class="panel-section">
       <h2>Add System Manually</h2>
@@ -138,7 +138,7 @@
     </div>
     <div class="systems-list" id="sysList"></div>
     <div style="padding:8px 12px;border-top:1px solid var(--border);flex-shrink:0">
-      <button class="btn btn-primary" style="width:100%;padding:8px" onclick="calculateRoute()">▶ CALCULATE ROUTE</button>
+      <button class="btn btn-primary" style="width:100%;padding:8px" onclick="calculateRoute()">&#x25B6; CALCULATE ROUTE</button>
     </div>
   </div>
   <div class="center">
@@ -177,68 +177,81 @@ function importCSV(){const text=document.getElementById('csvInput').value.trim()
 function loadFile(evt){const file=evt.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{parseCSVText(e.target.result);evt.target.value='';};reader.readAsText(file);}
 function parseCSVText(text){const lines=text.trim().split(/\r?\n/);let added=0,skipped=0;let start=0;const firstCols=lines[0].split(',');if(isNaN(parseFloat(firstCols[1]))||firstCols[0].toLowerCase().includes('name')||firstCols[0].toLowerCase().includes('system'))start=1;for(let i=start;i<lines.length;i++){const parts=lines[i].split(',').map(s=>s.trim().replace(/^"|"$/g,''));if(!parts[0])continue;const name=parts[0];const x=parseFloat(parts[1])||0;const y=parseFloat(parts[2])||0;const z=parseFloat(parts[3])||0;if(systems.find(s=>s.name.toLowerCase()===name.toLowerCase())){skipped++;continue;}systems.push({name,x,y,z});added++;}renderSystems();updateSelects();saveState();setStatus(`Imported ${added} systems${skipped?`, skipped ${skipped} duplicates`:''}.`,'ok');document.getElementById('csvInput').value='';}
 function removeSystem(name){systems=systems.filter(s=>s.name!==name);chains.forEach(c=>{c.items=c.items.filter(i=>i!==name);});route=[];renderSystems();renderChains();updateSelects();drawCanvas();saveState();}
-function renderSystems(){const list=document.getElementById('sysList');const startVal=document.getElementById('startSel')?.value||'';const endVal=document.getElementById('endSel')?.value||'';list.innerHTML='';document.getElementById('sys-count').textContent=systems.length;systems.forEach(sys=>{const div=document.createElement('div');div.className='sys-item'+(sys.name===startVal?' is-start':sys.name===endVal?' is-end':'');div.draggable=true;div.dataset.name=sys.name;div.innerHTML=`<span class="drag-hint">⠿</span><span class="sys-name">${sys.name}</span>${sys.name===startVal?'<span class="badge badge-start">S</span>':''}${sys.name===endVal?'<span class="badge badge-end">E</span>':''}<button class="btn btn-sm btn-danger" onclick="removeSystem('${sys.name.replace(/'/g,"\\'")}')">✕</button>`;div.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',sys.name);e.dataTransfer.effectAllowed='copy';div.classList.add('dragging');});div.addEventListener('dragend',()=>div.classList.remove('dragging'));list.appendChild(div);});}
-function updateSelects(startVal,endVal){const ss=document.getElementById('startSel');const se=document.getElementById('endSel');const sv=startVal!==undefined?startVal:ss.value;const ev=endVal!==undefined?endVal:se.value;const opts='<option value="">— none —</option>'+systems.map(s=>`<option value="${s.name}">${s.name}</option>`).join('');ss.innerHTML=opts;se.innerHTML=opts;if(systems.find(s=>s.name===sv))ss.value=sv;if(systems.find(s=>s.name===ev))se.value=ev;renderSystems();}
+function renderSystems(){const list=document.getElementById('sysList');const startVal=document.getElementById('startSel')?.value||'';const endVal=document.getElementById('endSel')?.value||'';list.innerHTML='';document.getElementById('sys-count').textContent=systems.length;systems.forEach(sys=>{const div=document.createElement('div');div.className='sys-item'+(sys.name===startVal?' is-start':sys.name===endVal?' is-end':'');div.draggable=true;div.dataset.name=sys.name;div.innerHTML=`<span class="drag-hint">&#x283F;</span><span class="sys-name">${sys.name}</span>${sys.name===startVal?'<span class="badge badge-start">S</span>':''}${sys.name===endVal?'<span class="badge badge-end">E</span>':''}<button class="btn btn-sm btn-danger" onclick="removeSystem('${sys.name.replace(/'/g,"\\'")}')">&#x2715;</button>`;div.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',sys.name);e.dataTransfer.effectAllowed='copy';div.classList.add('dragging');});div.addEventListener('dragend',()=>div.classList.remove('dragging'));list.appendChild(div);});}
+function updateSelects(startVal,endVal){const ss=document.getElementById('startSel');const se=document.getElementById('endSel');const sv=startVal!==undefined?startVal:ss.value;const ev=endVal!==undefined?endVal:se.value;const opts='<option value="">&mdash; none &mdash;</option>'+systems.map(s=>`<option value="${s.name}">${s.name}</option>`).join('');ss.innerHTML=opts;se.innerHTML=opts;if(systems.find(s=>s.name===sv))ss.value=sv;if(systems.find(s=>s.name===ev))se.value=ev;renderSystems();}
 function addChain(){chains.push({id:chainIdSeq++,items:[]});renderChains();saveState();}
 function removeChain(id){chains=chains.filter(c=>c.id!==id);renderChains();saveState();}
 function removeChainItem(chainId,idx){const c=chains.find(c=>c.id===chainId);if(c){c.items.splice(idx,1);renderChains();saveState();}}
-function renderChains(){const panel=document.getElementById('chainsPanel');panel.innerHTML='';if(chains.length===0){panel.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:6px;font-style:italic">No chains yet.<br>Click "+ New Chain" below.</div>';return;}chains.forEach((chain,ci)=>{const block=document.createElement('div');block.className='chain-block';const header=document.createElement('div');header.className='chain-header';header.innerHTML=`<span>Chain ${ci+1}</span><button class="btn btn-sm btn-danger" onclick="removeChain(${chain.id})">✕</button>`;const zone=document.createElement('div');zone.className='chain-drop-zone';zone.dataset.chainId=chain.id;if(chain.items.length===0){zone.innerHTML='<span class="chain-empty">Drop systems here</span>';}else{chain.items.forEach((name,idx)=>{if(idx>0){const arr=document.createElement('span');arr.textContent='→';arr.style.cssText='color:var(--text-muted);font-size:10px;align-self:center';zone.appendChild(arr);}const item=document.createElement('div');item.className='chain-item';item.draggable=true;item.dataset.chainId=chain.id;item.dataset.idx=idx;item.innerHTML=`${name}<span class="remove-item" onclick="removeChainItem(${chain.id},${idx})">✕</span>`;item.addEventListener('dragstart',e=>{e.dataTransfer.setData('chain-move',JSON.stringify({chainId:chain.id,idx}));e.dataTransfer.effectAllowed='move';});zone.appendChild(item);});}zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over');});zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-over');const chainId=parseInt(zone.dataset.chainId);const c=chains.find(c=>c.id===chainId);if(!c)return;const moveData=e.dataTransfer.getData('chain-move');if(moveData){const{chainId:srcId,idx:srcIdx}=JSON.parse(moveData);const src=chains.find(c=>c.id===srcId);if(!src)return;const name=src.items[srcIdx];src.items.splice(srcIdx,1);c.items.push(name);renderChains();saveState();return;}const name=e.dataTransfer.getData('text/plain');if(!name||!systems.find(s=>s.name===name))return;c.items.push(name);renderChains();saveState();});block.appendChild(header);block.appendChild(zone);panel.appendChild(block);});}
+function renderChains(){const panel=document.getElementById('chainsPanel');panel.innerHTML='';if(chains.length===0){panel.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:6px;font-style:italic">No chains yet.<br>Click "+ New Chain" below.</div>';return;}chains.forEach((chain,ci)=>{const block=document.createElement('div');block.className='chain-block';const header=document.createElement('div');header.className='chain-header';header.innerHTML=`<span>Chain ${ci+1}</span><button class="btn btn-sm btn-danger" onclick="removeChain(${chain.id})">&#x2715;</button>`;const zone=document.createElement('div');zone.className='chain-drop-zone';zone.dataset.chainId=chain.id;if(chain.items.length===0){zone.innerHTML='<span class="chain-empty">Drop systems here</span>';}else{chain.items.forEach((name,idx)=>{if(idx>0){const arr=document.createElement('span');arr.textContent='\u2192';arr.style.cssText='color:var(--text-muted);font-size:10px;align-self:center';zone.appendChild(arr);}const item=document.createElement('div');item.className='chain-item';item.draggable=true;item.dataset.chainId=chain.id;item.dataset.idx=idx;item.innerHTML=`${name}<span class="remove-item" onclick="removeChainItem(${chain.id},${idx})">&#x2715;</span>`;item.addEventListener('dragstart',e=>{e.dataTransfer.setData('chain-move',JSON.stringify({chainId:chain.id,idx}));e.dataTransfer.effectAllowed='move';});zone.appendChild(item);});}zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over');});zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-over');const chainId=parseInt(zone.dataset.chainId);const c=chains.find(c=>c.id===chainId);if(!c)return;const moveData=e.dataTransfer.getData('chain-move');if(moveData){const{chainId:srcId,idx:srcIdx}=JSON.parse(moveData);const src=chains.find(c=>c.id===srcId);if(!src)return;const name=src.items[srcIdx];src.items.splice(srcIdx,1);c.items.push(name);renderChains();saveState();return;}const name=e.dataTransfer.getData('text/plain');if(!name||!systems.find(s=>s.name===name))return;c.items.push(name);renderChains();saveState();});block.appendChild(header);block.appendChild(zone);panel.appendChild(block);});}
 
-// ─── Core geometry ───────────────────────────────────────────────────────────
+// ─── Core geometry ────────────────────────────────────────────────────────────
 function dist(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2);}
 function routeDist(names){let d=0;for(let i=0;i<names.length-1;i++){const a=systems.find(s=>s.name===names[i]);const b=systems.find(s=>s.name===names[i+1]);if(a&&b)d+=dist(a,b);}return d;}
 
 // ─── Chain constraint helpers ─────────────────────────────────────────────────
-function isValidRoute(r,cc){for(const chain of cc){if(!chain.items.length)continue;let p=0;for(const name of r){if(name===chain.items[p]){p++;if(p===chain.items.length)break;}}if(p<chain.items.length)return false;}return true;}
 function initProgress(cc){return cc.map(()=>0);}
 
-// Allow visiting `name` if:
-//   - it does not appear in any unfinished chain (completely unconstrained), OR
-//   - it is the very next required node in at least one unfinished chain.
-// This correctly handles a system that appears in multiple chains: being "next"
-// in even one chain is sufficient permission; being blocked in others does not
-// veto the visit (advanceProgress will advance all matching chains on entry).
-function canVisit(name,progress,cc){
-  let constrainedByAny=false;
+// Advance all chain progress counters past consecutive matches of `name`.
+function advanceProgress(name,progress,cc){
+  const np=[...progress];
+  for(let ci=0;ci<cc.length;ci++){
+    while(np[ci]<cc[ci].items.length&&cc[ci].items[np[ci]]===name)np[ci]++;
+  }
+  return np;
+}
+
+// Returns true if `name` may be visited next given current state:
+//   - name not yet visited AND not pending in any chain  → free, allow
+//   - name is the immediate next node in at least one chain → allow (revisit ok)
+//   - name appears later in a chain but isn't next, and hasn't been visited → block
+// `visited` is a Set of already-visited system names.
+function canVisit(name,visited,progress,cc){
+  // Check if any unfinished chain is waiting for this name at some future position
+  let pendingInChain=false;
   let nextInSome=false;
   for(let ci=0;ci<cc.length;ci++){
     const chain=cc[ci];const p=progress[ci];
-    if(p>=chain.items.length)continue; // this chain already satisfied
-    // Does name appear anywhere still pending in this chain?
-    let appearsHere=false;
-    for(let j=p;j<chain.items.length;j++){
-      if(chain.items[j]===name){appearsHere=true;break;}
+    if(p>=chain.items.length)continue;
+    if(chain.items[p]===name){nextInSome=true;pendingInChain=true;break;}
+    // name appears later in this chain but is not next — blocked
+    for(let j=p+1;j<chain.items.length;j++){
+      if(chain.items[j]===name){pendingInChain=true;break;}
     }
-    if(!appearsHere)continue; // name not relevant to this chain
-    constrainedByAny=true;
-    if(chain.items[p]===name)nextInSome=true;
+    if(pendingInChain&&!nextInSome)break;
   }
-  if(!constrainedByAny)return true;  // free — not in any pending chain
-  return nextInSome;                  // only allow if ready in at least one
+  if(nextInSome)return true;          // required next by at least one chain
+  if(pendingInChain)return false;     // needed later in a chain, not yet its turn
+  if(visited.has(name))return false;  // already visited, not chain-required
+  return true;                        // free system, not yet visited
 }
 
-function advanceProgress(name,progress,cc){const np=[...progress];for(let ci=0;ci<cc.length;ci++){const chain=cc[ci];while(np[ci]<chain.items.length&&chain.items[np[ci]]===name)np[ci]++;}return np;}
-function removeOneOccurrence(arr,value){const idx=arr.indexOf(value);if(idx===-1)return arr;return arr.filter((_,i)=>i!==idx);}
-function computeRequiredCounts(allNames,cc){
-  const req={};
-  for(const name of allNames)req[name]=1;
-  for(const chain of cc){
-    const local={};
-    for(const name of chain.items)local[name]=(local[name]||0)+1;
-    for(const [name,count] of Object.entries(local))req[name]=Math.max(req[name]||1,count);
+// Collect all visitable system names given current state.
+// Route is done when this returns an empty array (and all chains satisfied).
+function getCandidates(visited,progress,cc,endName){
+  const out=[];
+  for(const sys of systems){
+    const name=sys.name;
+    if(name===endName)continue; // end is appended manually after all others
+    if(canVisit(name,visited,progress,cc))out.push(name);
   }
-  return req;
+  return out;
 }
-function buildPool(allNames,startName,endName,cc){
-  const req=computeRequiredCounts(allNames,cc);
-  const pool=[];
-  for(const name of allNames){
-    let copies=req[name]||1;
-    if(name===startName)copies--;
-    if(endName&&endName!==startName&&name===endName)copies--;
-    for(let i=0;i<copies;i++)pool.push(name);
+
+// All chain progress counters have reached their end → constraints satisfied.
+function chainsComplete(progress,cc){
+  for(let ci=0;ci<cc.length;ci++)if(progress[ci]<cc[ci].items.length)return false;
+  return true;
+}
+
+// Validate a complete route against chain ordering (used by 2-opt/or-opt).
+function isValidRoute(r,cc){
+  for(const chain of cc){
+    if(!chain.items.length)continue;
+    let p=0;
+    for(const name of r){if(name===chain.items[p]){p++;if(p===chain.items.length)break;}}
+    if(p<chain.items.length)return false;
   }
-  return pool;
+  return true;
 }
 
 // ─── Prim's MST lower bound ───────────────────────────────────────────────────
@@ -247,58 +260,47 @@ function mstCost(nodes){
   const n=nodes.length;
   const inMST=new Uint8Array(n);
   const minEdge=new Float64Array(n).fill(Infinity);
-  minEdge[0]=0;
-  let total=0;
+  minEdge[0]=0;let total=0;
   for(let iter=0;iter<n;iter++){
     let u=-1;
     for(let i=0;i<n;i++)if(!inMST[i]&&(u===-1||minEdge[i]<minEdge[u]))u=i;
-    inMST[u]=1;
-    total+=minEdge[u];
-    for(let v=0;v<n;v++){
-      if(inMST[v])continue;
-      const d=dist(nodes[u],nodes[v]);
-      if(d<minEdge[v])minEdge[v]=d;
-    }
+    inMST[u]=1;total+=minEdge[u];
+    for(let v=0;v<n;v++){if(inMST[v])continue;const d=dist(nodes[u],nodes[v]);if(d<minEdge[v])minEdge[v]=d;}
   }
   return total;
 }
 
-function lowerBound(partialDist,currentSys,remainingSys,endSys){
-  if(remainingSys.length===0){
-    return partialDist+(endSys?dist(currentSys,endSys):0);
-  }
+function lowerBound(partialDist,currentSys,unvisitedSystems,endSys){
+  if(unvisitedSystems.length===0)return partialDist+(endSys?dist(currentSys,endSys):0);
   let minOut=Infinity;
-  for(const s of remainingSys){const d=dist(currentSys,s);if(d<minOut)minOut=d;}
-  const mst=mstCost(remainingSys);
+  for(const s of unvisitedSystems){const d=dist(currentSys,s);if(d<minOut)minOut=d;}
+  const mst=mstCost(unvisitedSystems);
   let minIn=0;
-  if(endSys){
-    minIn=Infinity;
-    for(const s of remainingSys){const d=dist(s,endSys);if(d<minIn)minIn=d;}
-  }
+  if(endSys){minIn=Infinity;for(const s of unvisitedSystems){const d=dist(s,endSys);if(d<minIn)minIn=d;}}
   return partialDist+minOut+mst+minIn;
 }
 
 // ─── Greedy nearest-neighbour seed ───────────────────────────────────────────
-function buildGreedyRoute(startName,endName,pool,cc){
-  let r=[startName];
+function buildGreedyRoute(startName,endName,cc){
+  const visited=new Set([startName]);
   let progress=advanceProgress(startName,initProgress(cc),cc);
-  let remaining=[...pool];
-  while(remaining.length>0){
+  const r=[startName];
+  while(true){
+    const candidates=getCandidates(visited,progress,cc,endName);
+    if(candidates.length===0)break;
     const cur=systems.find(s=>s.name===r[r.length-1]);
     let best=null,bestD=Infinity;
-    const seen=new Set();
-    for(const name of remaining){
-      if(seen.has(name))continue;seen.add(name);
-      if(!canVisit(name,progress,cc))continue;
+    for(const name of candidates){
       const s=systems.find(s=>s.name===name);
       const d=dist(cur,s);
       if(d<bestD){bestD=d;best=name;}
     }
-    if(!best)return null;
+    if(!best)break;
     r.push(best);
+    visited.add(best);
     progress=advanceProgress(best,progress,cc);
-    remaining=removeOneOccurrence(remaining,best);
   }
+  if(!chainsComplete(progress,cc))return null; // constraints unsatisfiable
   if(endName&&endName!==startName)r.push(endName);
   return r;
 }
@@ -306,8 +308,7 @@ function buildGreedyRoute(startName,endName,pool,cc){
 // ─── 2-opt local search (constraint-aware) ───────────────────────────────────
 function twoOpt(r,cc,deadline){
   const n=r.length;
-  const fixHead=1;
-  const fixTail=n-2;
+  const fixHead=1,fixTail=n-2;
   let improved=true;
   while(improved&&Date.now()<deadline){
     improved=false;
@@ -315,12 +316,7 @@ function twoOpt(r,cc,deadline){
       for(let j=i+1;j<=fixTail;j++){
         const candidate=[...r.slice(0,i),...r.slice(i,j+1).reverse(),...r.slice(j+1)];
         if(!isValidRoute(candidate,cc))continue;
-        const newD=routeDist(candidate);
-        if(newD<routeDist(r)-1e-9){
-          r=candidate;
-          improved=true;
-          break;
-        }
+        if(routeDist(candidate)<routeDist(r)-1e-9){r=candidate;improved=true;break;}
       }
       if(improved)break;
     }
@@ -328,7 +324,7 @@ function twoOpt(r,cc,deadline){
   return r;
 }
 
-// ─── Or-opt: move single nodes to a better position ──────────────────────────
+// ─── Or-opt: relocate single nodes ───────────────────────────────────────────
 function orOpt(r,cc,deadline){
   const n=r.length;
   let improved=true;
@@ -339,13 +335,9 @@ function orOpt(r,cc,deadline){
       for(let j=1;j<n-1;j++){
         if(j===i)continue;
         const candidate=r.filter((_,idx)=>idx!==i);
-        candidate.splice(j<i?j:j,0,r[i]);
+        candidate.splice(j,0,r[i]);
         if(!isValidRoute(candidate,cc))continue;
-        if(routeDist(candidate)<baseD-1e-9){
-          r=candidate;
-          improved=true;
-          break outer;
-        }
+        if(routeDist(candidate)<baseD-1e-9){r=candidate;improved=true;break outer;}
       }
     }
   }
@@ -356,67 +348,63 @@ function orOpt(r,cc,deadline){
 function doubleBridge(r,cc){
   const n=r.length;
   if(n<8)return r;
-  const interior=r.slice(1,n-1);
-  const len=interior.length;
+  const interior=r.slice(1,n-1);const len=interior.length;
   if(len<4)return r;
   const a=1+Math.floor(Math.random()*Math.floor(len/4));
   const b=1+Math.floor(len/4)+Math.floor(Math.random()*Math.floor(len/4));
   const c=1+Math.floor(len/2)+Math.floor(Math.random()*Math.floor(len/4));
-  const seg0=r.slice(0,a);
-  const seg1=r.slice(a,b);
-  const seg2=r.slice(b,c);
-  const seg3=r.slice(c,n-1);
-  const tail=r.slice(n-1);
-  const candidate=[...seg0,...seg3,...seg2,...seg1,...tail];
-  if(isValidRoute(candidate,cc))return candidate;
-  return r;
+  const candidate=[...r.slice(0,a),...r.slice(c,n-1),...r.slice(b,c),...r.slice(a,b),...r.slice(n-1)];
+  return isValidRoute(candidate,cc)?candidate:r;
 }
 
 // ─── Iterated Local Search ────────────────────────────────────────────────────
-function iteratedLocalSearch(startName,endName,pool,cc,timeLimit){
+function iteratedLocalSearch(startName,endName,cc,timeLimit){
   const deadline=Date.now()+timeLimit;
-  let best=buildGreedyRoute(startName,endName,pool,cc);
+  let best=buildGreedyRoute(startName,endName,cc);
   if(!best)return null;
   best=twoOpt(best,cc,deadline);
   best=orOpt(best,cc,deadline);
   let bestD=routeDist(best);
-  let ilsIter=0;
   while(Date.now()<deadline){
-    ilsIter++;
     let candidate=doubleBridge(best,cc);
     candidate=twoOpt(candidate,cc,deadline);
     candidate=orOpt(candidate,cc,deadline);
     const d=routeDist(candidate);
     if(d<bestD-1e-9){bestD=d;best=candidate;}
   }
-  return {route:best,dist:bestD,ilsIter};
+  return{route:best,dist:bestD};
 }
 
-// ─── Branch & Bound ──────────────────────────────────────────────────────────
-function branchAndBound(startName,endName,pool,cc,timeLimit){
+// ─── Branch & Bound ───────────────────────────────────────────────────────────
+// State: route built so far, visited Set, chain progress, accumulated distance.
+// Termination: getCandidates() returns [] AND chainsComplete() → leaf node.
+function branchAndBound(startName,endName,cc,timeLimit){
   const ilsTime=Math.floor(timeLimit*0.40);
-  const bbTime=timeLimit-ilsTime;
   const deadlineILS=Date.now()+ilsTime;
-  const deadlineBB=deadlineILS+bbTime;
+  const deadlineBB=deadlineILS+(timeLimit-ilsTime);
 
-  const ilsResult=iteratedLocalSearch(startName,endName,pool,cc,ilsTime);
-  let bestRoute=ilsResult?ilsResult.route:buildGreedyRoute(startName,endName,pool,cc);
+  const ilsResult=iteratedLocalSearch(startName,endName,cc,ilsTime);
+  let bestRoute=ilsResult?ilsResult.route:buildGreedyRoute(startName,endName,cc);
   let bestDist=bestRoute?routeDist(bestRoute):Infinity;
 
   const endSys=endName?systems.find(s=>s.name===endName):null;
-  let timedOut=false;
-  let nodesChecked=0;
+  let timedOut=false,nodesChecked=0;
 
+  const initVis=new Set([startName]);
   const initProg=advanceProgress(startName,initProgress(cc),cc);
-  const stack=[{route:[startName],remaining:pool.slice(),progress:initProg,partialDist:0}];
+  const stack=[{route:[startName],visited:initVis,progress:initProg,partialDist:0}];
 
   while(stack.length>0){
     if(Date.now()>=deadlineBB){timedOut=true;break;}
-    const {route,remaining,progress,partialDist}=stack.pop();
+    const{route,visited,progress,partialDist}=stack.pop();
     nodesChecked++;
 
-    if(remaining.length===0){
-      const fullDist=partialDist+(endSys?dist(systems.find(s=>s.name===route[route.length-1]),endSys):0);
+    const candidates=getCandidates(visited,progress,cc,endName);
+
+    if(candidates.length===0){
+      if(!chainsComplete(progress,cc))continue; // dead end — constraints not met
+      const curSys=systems.find(s=>s.name===route[route.length-1]);
+      const fullDist=partialDist+(endSys?dist(curSys,endSys):0);
       if(fullDist<bestDist){
         bestDist=fullDist;
         bestRoute=endName&&endName!==startName?[...route,endName]:[...route];
@@ -425,25 +413,22 @@ function branchAndBound(startName,endName,pool,cc,timeLimit){
     }
 
     const curSys=systems.find(s=>s.name===route[route.length-1]);
-    const seen=new Set();
-    const candidates=[];
-    for(const name of remaining){
-      if(seen.has(name))continue;seen.add(name);
-      if(!canVisit(name,progress,cc))continue;
+    // Compute lower bound and sort for best-first expansion
+    const expanded=candidates.map(name=>{
       const s=systems.find(s=>s.name===name);
-      candidates.push({name,sys:s,d:dist(curSys,s)});
-    }
-    candidates.sort((a,b)=>a.d-b.d);
+      return{name,sys:s,d:dist(curSys,s)};
+    }).sort((a,b)=>a.d-b.d);
 
-    for(let i=candidates.length-1;i>=0;i--){
-      const {name,sys,d}=candidates[i];
+    for(let i=expanded.length-1;i>=0;i--){
+      const{name,sys,d}=expanded[i];
       const newPartial=partialDist+d;
-      const newRemaining=removeOneOccurrence(remaining,name);
-      const remainingSys=newRemaining.map(n=>systems.find(s=>s.name===n));
+      // Remaining unvisited systems for MST bound (excluding chain-revisits)
+      const newVisited=new Set(visited);newVisited.add(name);
+      const remainingSys=systems.filter(s=>!newVisited.has(s.name)&&s.name!==endName);
       const lb=lowerBound(newPartial,sys,remainingSys,endSys);
       if(lb>=bestDist)continue;
       const newProgress=advanceProgress(name,progress,cc);
-      stack.push({route:[...route,name],remaining:newRemaining,progress:newProgress,partialDist:newPartial});
+      stack.push({route:[...route,name],visited:newVisited,progress:newProgress,partialDist:newPartial});
     }
   }
 
@@ -453,15 +438,12 @@ function branchAndBound(startName,endName,pool,cc,timeLimit){
 // ─── Self-check ───────────────────────────────────────────────────────────────
 function selfCheck(r,cc,startName,endName){
   const issues=[];
-  const allNames=systems.map(s=>s.name);
-  const exp=computeRequiredCounts(allNames,cc);
-  const got={};
-  for(const n of r)got[n]=(got[n]||0)+1;
-  for(const n of allNames){const g=got[n]||0;const e=exp[n]||1;if(g!==e)issues.push(`"${n}" visited ${g}x (expected ${e})`);}
-  for(const n of r)if(!systems.find(s=>s.name===n))issues.push(`Unknown system "${n}"`);
   if(!isValidRoute(r,cc))issues.push('Chain order constraints violated!');
   if(startName&&r[0]!==startName)issues.push(`Does not start at "${startName}"`);
   if(endName&&endName!==startName&&r[r.length-1]!==endName)issues.push(`Does not end at "${endName}"`);
+  // Every system should appear at least once
+  const inRoute=new Set(r);
+  for(const sys of systems){if(!inRoute.has(sys.name))issues.push(`"${sys.name}" missing from route`);}
   return issues;
 }
 
@@ -472,25 +454,22 @@ function calculateRoute(){
   const cc=chains.filter(c=>c.items.length>0);
   if(systems.length<2){setStatus('Need at least 2 systems.','err');return;}
   if(!startName){setStatus('Select a start system.','err');return;}
-  setStatus('Running ILS + B&B…','info');
+  setStatus('Running ILS + B&B\u2026','info');
   const t0=Date.now();
   setTimeout(()=>{
     try{
-      const allNames=systems.map(s=>s.name);
-      const pool=buildPool(allNames,startName,endName,cc);
       const TIME_LIMIT=2500;
-      const {route:best,dist:bestDist,timedOut,nodesChecked}=branchAndBound(startName,endName,pool,cc,TIME_LIMIT);
-      if(!best){setStatus('No valid route found — check chain constraints.','err');return;}
+      const{route:best,dist:bestDist,timedOut,nodesChecked}=branchAndBound(startName,endName,cc,TIME_LIMIT);
+      if(!best){setStatus('No valid route found \u2014 check chain constraints.','err');return;}
       const elapsed=Date.now()-t0;
       route=best;
       const issues=selfCheck(route,cc,startName,endName);
       const optimality=timedOut?'best-in-time':'optimal';
       renderRoute(elapsed,nodesChecked,issues,optimality);
-      drawCanvas();
-      saveState();
-      if(issues.length>0)setStatus(`⚠ ${issues[0]}`,'warn');
-      else if(timedOut)setStatus(`⏱ ILS+B&B timeout — best found: ${bestDist.toFixed(1)} ly · ${nodesChecked} nodes · ${elapsed}ms`,'warn');
-      else setStatus(`✔ Optimal: ${bestDist.toFixed(1)} ly · ${nodesChecked} nodes · ${elapsed}ms`,'ok');
+      drawCanvas();saveState();
+      if(issues.length>0)setStatus(`\u26a0 ${issues[0]}`,'warn');
+      else if(timedOut)setStatus(`\u23f1 ILS+B&B timeout \u2014 best found: ${bestDist.toFixed(1)} ly \u00b7 ${nodesChecked} nodes \u00b7 ${elapsed}ms`,'warn');
+      else setStatus(`\u2714 Optimal: ${bestDist.toFixed(1)} ly \u00b7 ${nodesChecked} nodes \u00b7 ${elapsed}ms`,'ok');
     }catch(e){setStatus('Error: '+e.message,'err');console.error(e);}
   },20);
 }
@@ -500,16 +479,14 @@ function renderRoute(elapsed,nodeCount,issues,optimality){
   const list=document.getElementById('routeList');
   const startName=document.getElementById('startSel').value;
   const endName=document.getElementById('endSel').value||startName;
-  list.innerHTML='';
-  let totalDist=0;
+  list.innerHTML='';let totalDist=0;
   route.forEach((name,i)=>{
     if(i>0){
       const a=systems.find(s=>s.name===route[i-1]);
       const b=systems.find(s=>s.name===name);
-      const d=(a&&b)?dist(a,b):0;
-      totalDist+=d;
+      const d=(a&&b)?dist(a,b):0;totalDist+=d;
       const arrow=document.createElement('div');arrow.className='route-step';
-      arrow.innerHTML=`<span class="route-arrow">→</span><span class="route-dist">${d.toFixed(1)}</span>`;
+      arrow.innerHTML=`<span class="route-arrow">\u2192</span><span class="route-dist">${d.toFixed(1)}</span>`;
       list.appendChild(arrow);
     }
     const node=document.createElement('div');node.className='route-step';
@@ -518,7 +495,7 @@ function renderRoute(elapsed,nodeCount,issues,optimality){
     node.innerHTML=`<span class="route-node ${isStart?'start-node':''} ${isEnd?'end-node':''}">${i+1}. ${name}</span>`;
     list.appendChild(node);
   });
-  document.getElementById('route-summary').textContent=route.length>0?`${route.length} stops · ${totalDist.toFixed(1)} ly`:'';
+  document.getElementById('route-summary').textContent=route.length>0?`${route.length} stops \u00b7 ${totalDist.toFixed(1)} ly`:'';
   const checkOk=issues&&issues.length===0;
   const isOptimal=optimality==='optimal';
   document.getElementById('statsBox').innerHTML=route.length>0?
@@ -526,10 +503,10 @@ function renderRoute(elapsed,nodeCount,issues,optimality){
     `<div><span class="stat-label">Route stops</span><span class="stat-val">${route.length}</span></div>`+
     `<div><span class="stat-label">Total dist.</span><span class="stat-val">${totalDist.toFixed(1)} ly</span></div>`+
     `<div><span class="stat-label">Jumps</span><span class="stat-val">${route.length-1}</span></div>`+
-    `<div><span class="stat-label">B&B nodes</span><span class="stat-val">${nodeCount.toLocaleString()}</span></div>`+
+    `<div><span class="stat-label">B&amp;B nodes</span><span class="stat-val">${nodeCount.toLocaleString()}</span></div>`+
     `<div><span class="stat-label">Time</span><span class="stat-val">${elapsed}ms</span></div>`+
-    `<div><span class="stat-label">Optimality</span><span class="stat-val ${isOptimal?'ok':''}">${isOptimal?'★ Optimal':'⏱ Best/time'}</span></div>`+
-    `<div><span class="stat-label">Self-check</span><span class="stat-val ${checkOk?'ok':'err'}">${checkOk?'✔ PASS':'✘ FAIL'}</span></div>`+
+    `<div><span class="stat-label">Optimality</span><span class="stat-val ${isOptimal?'ok':''}">${isOptimal?'\u2605 Optimal':'\u23f1 Best/time'}</span></div>`+
+    `<div><span class="stat-label">Self-check</span><span class="stat-val ${checkOk?'ok':'err'}">${checkOk?'\u2714 PASS':'\u2718 FAIL'}</span></div>`+
     (issues&&issues.length>0?issues.map(i=>`<div style="color:var(--danger);font-size:10px;clear:both">${i}</div>`).join(''):'')
   :'';
 }
